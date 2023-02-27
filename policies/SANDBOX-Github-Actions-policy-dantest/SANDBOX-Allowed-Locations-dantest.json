@@ -1,0 +1,22 @@
+{
+  "properties": {
+      "displayName": "SANDBOX-Allowed-Locations-dantest",
+      "description": "The list of Allowed locations for resources",
+      "metadata": {
+          "assignedBy": "githubactions"
+      },
+      "enforcementMode": "DoNotEnforce",
+      "notScopes": [],
+      "policyDefinitionId": "/subscriptions/BLANKEDOUTFORGITHUB/providers/Microsoft.Authorization/policyDefinitions/BLANKEDOUTFORGITHUB",
+      "nonComplianceMessages": [
+          {
+              "message": "You chose a location that we do not support.  Please reach out to BLANKEDOUTFORGITHUB."
+          }
+      ],
+      "parameters": {
+          "allowedLocations": {
+              "value": "EastUS"
+          }
+        }
+  }
+}

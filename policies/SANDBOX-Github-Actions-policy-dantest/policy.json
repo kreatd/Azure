@@ -1,0 +1,45 @@
+{
+  "properties": {
+    "displayName": "SANDBOX-Allowed-Locations-dantest",
+    "policyType": "Custom",
+    "mode": "All",
+    "metadata": {
+      "createdBy": "BLANKEDOUTFORGITHUB",
+      "createdOn": "2023-02-17T19:08:53.7759008Z",
+      "updatedBy": "BLANKEDOUTFORGITHUB",
+      "updatedOn": "2023-02-22T14:26:50.8927555Z"
+    },
+    "parameters": {
+      "allowedLocations": {
+        "type": "Array",
+        "metadata": {
+          "displayName": "Allowed locations",
+          "description": "The list of allowed locations for resources.",
+          "strongType": "location"
+        }
+      }
+    },
+    "policyRule": {
+      "if": {
+        "not": {
+          "field": "location",
+          "in": "[parameters('allowedLocations')]"
+        }
+      },
+      "then": {
+        "effect": "audit"
+      }
+    }
+  },
+  "id": "/subscriptions/BLANKEDOUTFORGITHUB/providers/Microsoft.Authorization/policyDefinitions/BLANKEDOUTFORGITHUB",
+  "type": "Microsoft.Authorization/policyDefinitions",
+  "name": "BLANKEDOUTFORGITHUB",
+  "systemData": {
+    "createdBy": "BLANKEDOUTFORGITHUB",
+    "createdByType": "User",
+    "createdAt": "2023-02-17T19:08:53.6711901Z",
+    "lastModifiedBy": "BLANKEDOUTFORGITHUB",
+    "lastModifiedByType": "User",
+    "lastModifiedAt": "2023-02-22T14:26:50.7614163Z"
+  }
+}
