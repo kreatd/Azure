@@ -1,0 +1,229 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "powerSchedule": {
+            "type": "string"
+        },
+        "powerOnTime": {
+            "type": "int",
+            "defaultValue": 7,
+            "allowedValues": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+            ]
+        },
+        "powerOffTime": {
+            "type": "int",
+            "defaultValue": 19,
+            "allowedValues": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+            ]
+        },
+        "vmName": {
+            "type": "string"
+        },
+        "rg": {
+            "type": "string"
+        },
+        "virtualMachineSize": {
+            "type": "string"
+        },
+        "storageAccountName": {
+            "type": "string"
+        },
+        "recoveryServicesVaultName": {
+            "type": "string"
+        },
+        "OS": {
+            "type": "string",
+            "allowedValues": [
+                "2012-R2-Datacenter",
+                "2016-Datacenter",
+                "2019-Datacenter",
+                "2022-Datacenter"
+            ]
+        },
+        "adminUsername": {
+            "type": "string"
+        },
+        "virtualNetworkName": {
+            "type": "string"
+        },
+        "virtualNetworkResourceGroupName": {
+            "type": "string"
+        },
+        "subnetName": {
+            "type": "string"
+        },
+        "adminPassword": {
+            "type": "securestring"
+        },
+        "domainName": {
+            "type": "string",
+            "allowedValues": [
+                "nameofourdomain"
+            ]
+        },
+        "domainUsername": {
+            "type": "string"
+        },
+        "domainPassword": {
+            "type": "securestring"
+        },
+        "ouPath": {
+            "type": "string"
+        },
+        "diskEncryptionSetId": {
+            "type": "string"
+        },
+        "timeZone": {
+            "type": "string"
+        },
+        "avSetFlag": {
+            "type": "string"
+        },
+        "availabilitySetName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "OSSupportTeam": {
+            "type": "string"
+        }
+
+    },
+    "variables": {
+        "vnetId": "[resourceId(parameters('virtualNetworkResourceGroupName'),'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+        "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]",
+        "networkInterfaceName": "[concat(parameters('vmName'),'-nic')]",
+        "apiVersion": "2015-06-15",
+        "existingBackUpPolicy": "DefaultPolicy",
+        "v2VmContainer": "iaasvmcontainer;iaasvmcontainerv2;",
+        "v2Vm": "vm;iaasvmcontainerv2;",
+        "availabilitySet": {
+            "id": "[resourceId('Microsoft.Compute/availabilitySets',parameters('availabilitySetName'))]"
+        }
+    },
+    "resources": [{
+            "name": "[variables('networkInterfaceName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2016-09-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "properties": {
+                "ipConfigurations": [{
+                    "name": "ipconfig1",
+                    "properties": {
+                        "subnet": {
+                            "id": "[variables('subnetRef')]"
+                        },
+                        "privateIPAllocationMethod": "Dynamic"
+                    }
+                }]
+            }
+        },
+        {
+            "name": "[parameters('vmName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-07-01",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Metrics": "Percentage CPU, Network In, Network Out, Disk Read Bytes, Disk Write Bytes, Disk Read Operations/Sec, Disk Write Operations/Sec",
+                "PowerTemplate": "[concat('{','\"PowerSchedule\": ','\"',parameters('powerSchedule'),'\"',', ','\"PowerOnTime\": \"',parameters('powerOnTime'),'\", ','\"PowerOffTime\": \"',parameters('powerOffTime'),'\"}')]",
+                "OS Support": "[parameters('OSSupportTeam')]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', variables('networkInterfaceName'))]"
+            ],
+            "properties": {
+                "licenseType": "Windows_Server",
+                "osProfile": {
+                    "computerName": "[parameters('vmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVmAgent": "true",
+                        "timeZone": "[parameters('timeZone')]"
+                    }
+                },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('virtualMachineSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[parameters('OS')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "[concat(parameters('vmName'), '-os-disk')]",
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS" ,                            
+                            "diskEncryptionSet": {
+                                "id": "[parameters('diskEncryptionSetId')]"
+                            }
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [{
+                        "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+                    }]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', parameters('storageAccountName')), '2016-01-01').primaryEndpoints.blob)]"
+                    }
+                },
+                "availabilitySet":"[if(equals(parameters('avSetFlag'), 'True'), variables('availabilitySet'), json('null'))]"
+            } 
+        },
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('vmName'),'/joinDomain')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "JsonADDomainExtension",
+                "typeHandlerVersion": "1.3",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "Name": "[parameters('domainName')]",
+                    "OUPath": "[parameters('ouPath')]",
+                    "User": "[concat(parameters('domainName'), '\\', parameters('domainUsername'))]",
+                    "Restart": "true",
+                    "Options": 3
+                },
+                "protectedsettings": {
+                    "Password": "[parameters('domainPassword')]"
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('recoveryServicesVaultName'), '/Azure/', variables('v2VmContainer'), concat(parameters('rg'),';',parameters('vmName')), '/', variables('v2Vm'), concat(parameters('rg'),';',parameters('vmName')))]",
+            "apiVersion": "2016-06-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'), '/extensions/joinDomain')]"
+            ],
+            "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems",
+            "properties": {
+                "protectedItemType": "Microsoft.Compute/virtualMachines",
+                "policyId": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies',parameters('recoveryServicesVaultName'),variables('existingBackupPolicy') )]",
+                "sourceResourceId": "[resourceId(subscription().subscriptionId,parameters('rg'),'Microsoft.Compute/virtualMachines',parameters('vmName'))]"
+            }
+        }
+    ],
+    "outputs": {
+        "adminUsername": {
+            "type": "string",
+            "value": "[parameters('adminUsername')]"
+        }
+    }
+}

@@ -1,0 +1,207 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourceGroupFromTemplate": {
+            "type": "string"
+        },
+        "vmSize": {
+            "type": "string"
+        },
+        "vmName": {
+            "type": "string"
+        },
+        "powerSchedule": {
+            "type": "string"
+        },
+        "powerOnTime": {
+            "type": "int",
+            "defaultValue": 7,
+            "allowedValues": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+            ]
+        },
+        "powerOffTime": {
+            "type": "int",
+            "defaultValue": 19,
+            "allowedValues": [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+            ]
+        },
+        "virtualNetworkName": {
+            "type": "string"
+        },
+        "virtualNetworkResourceGroupName": {
+            "type": "string"
+        },
+        "subnetName": {
+            "type": "string"
+        },
+        "adminUsername": {
+            "type": "string"
+        },
+        "adminPassword": {
+            "type": "securestring"
+        },
+        "storageAccountName": {
+            "type": "string"
+        },
+        "recoveryServicesVaultName": {
+            "type": "string"
+        },
+        "diskEncryptionSetId": {
+            "type": "string"
+        },
+        "avSetFlag": {
+            "type": "string"
+        },
+        "availabilitySetName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "OSSupportTeam": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "vnetID": "[resourceId(parameters('virtualNetworkResourceGroupName'),concat('Microsoft.Network','/','virtualNetworks'),parameters('virtualNetworkName'))]",
+        "subnetRef": "[concat(variables('vnetID'),'/subnets/',parameters('subnetName'))]",
+        "nicName": "[concat(parameters('vmName'),'-nic')]",
+        "existingBackUpPolicy": "DefaultPolicy",
+        "v2Vm": "vm;iaasvmcontainerv2;",
+        "availabilitySet": {
+            "id": "[resourceId('Microsoft.Compute/availabilitySets',parameters('availabilitySetName'))]"
+        }
+    },
+    "resources": [
+        {
+            "name": "[concat(variables('nicName'))]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2018-10-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('vmName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2020-06-01",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Metrics": "Percentage CPU, Network In, Network Out, Disk Read Bytes, Disk Write Bytes, Disk Read Operations/Sec, Disk Write Operations/Sec",
+                "PowerTemplate": "[concat('{','\"PowerSchedule\": ','\"',parameters('powerSchedule'),'\"',', ','\"PowerOnTime\": \"',parameters('powerOnTime'),'\", ','\"PowerOffTime\": \"',parameters('powerOffTime'),'\"}')]",
+                "OS Support": "[parameters('OSSupportTeam')]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                    "osDisk": {
+                        "createOption": "fromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS",
+                            "diskEncryptionSet": {
+                                "id": "[parameters('diskEncryptionSetId')]"
+                            }
+                        }
+                    },
+                    "imageReference": {
+                        "publisher": "RedHat",
+                        "offer": "RHEL",
+                        "sku": "7.8",
+                        "version": "latest"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[parameters('vmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat('https://', parameters('storageAccountName'), '.blob.core.windows.net/')]"
+                    }
+                },
+                "licenseType": "RHEL_BYOS",
+                "availabilitySet":"[if(equals(parameters('avSetFlag'), 'True'), variables('availabilitySet'), json('null'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('vmName'),'/RHELCustomConfig')]",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+            ],
+            "apiVersion": "2020-06-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.0",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "skipDos2Unix": false,
+                    "timestamp": 123456789
+                },
+                "protectedSettings": {
+                    "commandToExecute": "sleep 30; HOSTNAME=$(hostname); sed -i 's/reddog.microsoft.com/org.name.com/g' /etc/resolv.conf; subscription-manager config --rhsm.auto_enable_yum_plugins=0; rpm -ivh http://puppet.server.name/pub/katello-ca-consumer-latest.noarch.rpm --force; sleep 15; subscription-manager register --org=nameoforg --activationkey=ak-nameofkey-composite-x86_64 --release=7Server --force; yum install puppet-agent -y -q; echo '[main]' >  /etc/puppetlabs/puppet/puppet.conf; echo 'vardir = /opt/puppetlabs/puppet/cache' >> /etc/puppetlabs/puppet/puppet.conf; echo 'logdir = /var/log/puppetlabs/puppet' >> /etc/puppetlabs/puppet/puppet.conf; echo 'rundir = /var/run/puppetlabs' >> /etc/puppetlabs/puppet/puppet.conf; echo 'ssldir = /etc/puppetlabs/puppet/ssl' >> /etc/puppetlabs/puppet/puppet.conf; echo '[agent]' >> /etc/puppetlabs/puppet/puppet.conf; echo 'pluginsync      = true' >> /etc/puppetlabs/puppet/puppet.conf; echo 'report          = true' >> /etc/puppetlabs/puppet/puppet.conf; echo 'ignoreschedules = true' >> /etc/puppetlabs/puppet/puppet.conf; echo 'daemon          = false' >> /etc/puppetlabs/puppet/puppet.conf; echo 'ca_server       = puppet.server.name' >> /etc/puppetlabs/puppet/puppet.conf; echo certname = ${HOSTNAME}.puppet.server.name >> /etc/puppetlabs/puppet/puppet.conf; echo 'environment     = puppet_modules_15' >> /etc/puppetlabs/puppet/puppet.conf; echo 'server          = puppet.server.name' >> /etc/puppetlabs/puppet/puppet.conf; systemctl enable puppet; /usr/bin/puppet agent --config /etc/puppetlabs/puppet/puppet.conf --onetime --server puppetserver.domain.name --no-daemonize; sleep 15; systemctl restart puppet"
+                }
+            }
+        },
+        {
+            "apiVersion": "2017-05-10",
+            "name": "[concat(parameters('vmName'), '-' , 'BackupIntent')]",
+            "type": "Microsoft.Resources/deployments",
+            "resourceGroup": "[parameters('resourceGroupFromTemplate')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('recoveryServicesVaultName'), '/Azure/', variables('v2Vm'), parameters('resourceGroupFromTemplate'), ';', parameters('vmName'))]",
+                            "apiVersion": "2017-07-01",
+                            "type": "Microsoft.RecoveryServices/vaults/backupFabrics/backupProtectionIntent",
+                            "properties": {
+                                "friendlyName": "[concat(parameters('vmName'), 'BackupIntent')]",
+                                "protectionIntentItemType": "AzureResourceItem",
+                                "policyId": "[resourceId(parameters('resourceGroupFromTemplate'), 'Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), variables('existingBackUpPolicy'))]",
+                                "sourceResourceId": "[resourceId(parameters('resourceGroupFromTemplate'), 'Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[resourceId(parameters('resourceGroupFromTemplate'), 'Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            ]
+        }
+    ],
+    "outputs": {
+    }
+}
