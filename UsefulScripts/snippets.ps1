@@ -1,4 +1,37 @@
+##Update techincal contact field on all resources within a resource group 
+
+$mergedTags = @{"key"="value";} 
+$resources = get-azresource –resourcegroupname "" 
+
+foreach($resource in $resources) 
+{ 
+  Update-AzTag -ResourceId $resource.resourceid -Tag $mergedTags -Operation Replace 
+} 
+
  
+
+ 
+##### report on keyvaults for security 
+
+$subs = get-azsubscription 
+ 
+foreach($sub in $subs){ 
+
+    set-azcontext $sub 
+    $keyVaults = get-azkeyvault 
+    $keyVaultCerts =@() 
+
+
+foreach($vaultName in $keyVaults){ 
+
+    $keyVaultCerts += get-azkeyvaultcertificate -VaultName $vaultname.vaultname 
+
+    } 
+
+    Write-output "There are $($keyVaults.count) Azure Key Vaults in $($sub.name)" 
+    Write-output "There are $($keyVaultCerts.count) Certificates in $($sub.name)" 
+
+}  
 ##### 
 
 #Set get/list access to kvs 
