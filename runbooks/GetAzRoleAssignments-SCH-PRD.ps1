@@ -1,12 +1,13 @@
 <#############################################################################
  
-    Azure Automation Runbook 
+  - Azure Automation Runbook 
     AUTHORS:  Dan Kreatsoulas
     CONTRIBUTORS:
     DATE:  12/19/2022
     COMMENT: This script will generate a list of role assignments that have been created within the past 24 hours.
     VERSION HISTORY:
     1.0 - 12/19/2022 - Created
+    1.1 - 5/19/2023 - Added Management groups as well as converted the script to use Microsoft Graph APIs
     FUTURE ENHANCEMENTS:
     Capture role assignments at the Management group level?
 #############################################################################>
@@ -57,7 +58,7 @@ function new-emailStyle_Body {
   <br>    
       Thanks,
   <br>
-      [enter team name]
+      ETI 
 
   </body>
   </html>
@@ -65,51 +66,81 @@ function new-emailStyle_Body {
   return $Output
 }
 
-$emailOutput= [System.Collections.ArrayList]::new()
-$subs = get-azsubscription
+$subscriptions = get-azsubscription
 
-foreach($sub in $subs) {
-
-#Set context, gather all roleassignments within the context and get all azactivity log entries that pertain to roleassignments/*
-Set-AzContext $sub
-$listofRoleAssignments = get-azroleassignment
-$loggedAssignments = Get-AzLog -StartTime (Get-Date).AddDays(-1) | Where-Object {$_.Authorization.Action -like 'Microsoft.Authorization/roleAssignments/*' -and $_.OperationName -ne "Delete role assignment"}
-
-#Only pull in assignments that have a status of "Started."  This corrects the bug where there's a % chance that the activity log is missing the succeeded status.
-$loggedAssignments = $loggedAssignments | where {$_.status -eq "Succeeded"}
-
-  foreach($assignment in $loggedAssignments) {
-  #Loop through each assignment within the logged assignments and gather the necessary info for the report
-  $assignment
-  $assignmentName = $assignment.authorization.scope.split("/") | select -last 1
-  $time = ([DateTime]$assignment.SubmissionTimeStamp).ToLocalTime()
-  $formattedTime = Get-date -date $time -format G
-  $parsedassignment = $listofRoleAssignments | where {$_.RoleAssignmentName -eq $assignmentName}
-  $parsedassignment
-
-  #If the scope's parent is the subscription, clip it out to remove irrelevant data from the report.
- <#   if($parsedassignment.scope -match "resourceGroups") {
-        $scope = $parsedassignment.scope.split("resourceGroups/")
-        $scope = $scope[1]
-    }else{
-        $scope = $parsedassignment.scope
-    }
-#>
-  #Append report data to the output of the report.
-  #Ignore null data (this happens when you create and delete the same role assignment within the window of this report.)
-if($null -ne $parsedassignment.scope -and $null -ne $parsedassignment.RoleDefinitionName -and $null -ne $parsedassignment.DisplayName)
-  {
-    [void]$emailOutput.Add([PSCustomObject]@{
-        'Subscription' = $sub.name
-        'Resource Scope' = $parsedassignment.scope
-        'Role Assigned' = $parsedassignment.RoleDefinitionName
-        'Assigned To' = $parsedassignment.DisplayName
-        'Assigned By' = $assignment.caller
-        'Assignment Time' = $formattedTime
-    })
-    }
-  }  #}
+foreach($subscription in $subscriptions){
+  set-azcontext $subscription.name
+  $roleAssignments += get-azRoleAssignment
 }
+
+$roleAssignments = $roleAssignments | select * -unique
+$emailOutput = New-Object System.Collections.ArrayList
+$managementGroups = (get-azManagementGroup).name
+$timestamp = (Get-Date).AddHours(-24).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+$accesstoken = GetCloudAutomationSPN-AADAccessToken -scope "https://management.azure.com/"
+$token = $accesstoken.access_token
+$responses = @()
+$headers = @{ 'Authorization' = "Bearer $token" }
+$roleDefinitions = get-azRoleDefinition
+
+foreach($managementGroup in $managementGroups) {
+
+  $uri = "https://management.azure.com/providers/Microsoft.Management/managementGroups/$managementGroup/providers/Microsoft.Insights/eventtypes/management/values?api-version=2017-03-01-preview&`$filter=eventTimeStamp ge '$timestamp'"
+  $responses += invoke-restmethod -uri $uri -method "GET" -headers $headers
+
+}
+
+foreach($subscription in $subscriptions) {
+
+  $uri = "https://management.azure.com/subscriptions/$($subscription.id)/providers/Microsoft.Insights/eventtypes/management/values?api-version=2017-03-01-preview&`$filter=eventTimeStamp ge '$timestamp'"
+  $responses += invoke-restmethod -uri $uri -method "GET" -headers $headers
+    
+}
+
+$succeededResponses = $responses.value | Where-Object {$_.status.value -eq "Succeeded"}
+$roleAssignmentActions = $succeededResponses | Where-Object {$_.Authorization.Action -eq "Microsoft.Authorization/roleAssignments/write" -or $_.Authorization.Action -eq "Microsoft.Authorization/roleAssignments/delete"}
+
+foreach($roleAssignmentAction in $roleAssignmentActions){
+ 
+  $assignmentName = $roleAssignmentAction.resourceId.split("/") | select -last 1
+  $parsedAssignment = $roleAssignments | Where-Object {$_.RoleAssignmentName -eq $assignmentName}
+
+  $assignmentLocation = $roleAssignmentAction.properties.hierarchy.split("/") | select -last 1
+  if($subscriptions.id -like $assignmentLocation){
+
+    $assignmentLocation = $subscriptions | where-object {$_.id -like $assignmentLocation} | select name
+    $assignmentLocation = $assignmentLocation.name
+
+  }
+
+  if($roleAssignmentAction.authorization.action -eq "Microsoft.Authorization/roleAssignments/delete") {
+  
+    $roleAssigned = $roleAssignmentAction.properties.responsebody | convertfrom-json
+    $resourceScope = $roleassigned.properties.scope
+    $roleDefinitionID = $roleAssigned.Properties.roledefinitionid.split("/") | select -last 1
+    $roleAssignmentName = $roleDefinitions | Where-Object {$_.id -eq $roleDefinitionID } | select name
+    $roleAssignmentName = $roleAssignmentName.name
+
+  }else{
+    $roleAssignmentName = ($roleAssignments | Where-Object {$_.RoleAssignmentName -eq $assignmentName} | select RoleDefinitionName).RoleDefinitionName
+  }
+
+    $time = ([DateTime]$roleAssignmentAction.SubmissionTimeStamp).ToLocalTime()
+    $formattedTime = Get-date -date $time -format G
+
+    #Role assignments that have been deleted have no record of the displayname or signin name, so it will be left blank
+    $emailOutput.Add([PSCustomObject]@{
+      'Assignment Location' = $assignmentLocation
+      #'Resource Scope' = $roleAssignmentAction.authorization.scope
+      'Action' = $roleAssignmentAction.Authorization.Action.split("/") | select -last 1
+      'Role Assigned' = $roleAssignmentName
+      'Assigned To' = $parsedassignment.DisplayName
+      'SignInName' = $parsedassignment.SignInName
+      'Modified By' = $roleAssignmentAction.caller
+      'Assignment Time' = $formattedTime
+    })
+}
+
 #Create a count for the report and convert the data to html
 $araCount = $emailOutput.count
 $emailOutput = $emailOutput | convertto-html
@@ -117,8 +148,9 @@ $emailOutput = $emailOutput | convertto-html
 
 # generate the style / body of the email
 $emailBody = new-emailStyle_Body
-$emailFrom = "[enter email]"
-$emailTo = "[enter email]"
+$emailFrom = ""
+$emailTo = ""
+#$emailTo = ""
 
 #If report catches a role assigment being created, send an email, else do nothing.
 if ($araCount -ge 1) {`
@@ -129,10 +161,10 @@ if ($araCount -ge 1) {`
       Body        = $emailBody
       BodyAsHTML  = $True
       Priority    = "Normal"
-      SmtpServer  = "[smtpserver]"
+      SmtpServer  = ""
   }
 }
 
-# Send the email
+# Send the email to ECS
 Send-MailMessage @Parameters
 
