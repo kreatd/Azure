@@ -1,0 +1,39 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "location": {
+        "value": "eastus"
+      },
+      "storageAccountName": {
+        "value": "storageaccount name"
+      },
+      "storageAccountType": {
+        "value": "Standard_LRS"
+      },
+      "storageAcctAccessTier": {
+        "value": "Hot"
+      },
+      "storageAccKind": {
+        "value": "StorageV2"
+      },
+      "keyVaultName": {
+        "value": "key vault name"
+      },
+      "keyVaultKeyName": {
+        "value": "SSE-Key"
+      },
+      "keyversion": {
+        "value": null
+      },
+      "blobSoftDeleteRetentionDays": {
+        "value": 7
+      },
+      "containerSoftDeleteRetentionDays": {
+        "value": 7
+      },
+      "shareSoftDeleteRetentionDays": {
+        "value": 7
+      }
+    }
+  }

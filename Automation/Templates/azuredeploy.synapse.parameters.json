@@ -1,0 +1,128 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "name": {
+            "value": "synapse workspace name"
+        },
+        "location": {
+            "value": "eastus"
+        },
+        "defaultDataLakeStorageAccountName": {
+            "value": "storage account name"
+        },
+        "defaultDataLakeStorageFilesystemName": {
+            "value": "synfilesystem"
+        },
+        "sqlAdministratorLogin": {
+            "value": "sqladminuser"
+        },
+        "sqlAdministratorLoginPassword": {
+            "value": null
+        },
+        "setWorkspaceIdentityRbacOnStorageAccount": {
+            "value": true
+        },
+        "createManagedPrivateEndpoint": {
+            "value": true
+        },
+        "defaultAdlsGen2AccountResourceId": {
+            "value": "storage account id"
+        },
+        "azureADOnlyAuthentication": {
+            "value": false
+        },
+        "allowAllConnections": {
+            "value": true
+        },
+        "managedVirtualNetwork": {
+            "value": "default"
+        },
+        "tagValues": {
+            "value": {}
+        },
+        "encryption": {
+            "value": {
+                "cmk": {
+                    "key": {
+                        "name": "default",
+                        "keyVaultUrl": "sse-key url"
+                    },
+                    "kekIdentity": {
+                        "useSystemAssignedIdentity": true,
+                        "userAssignedIdentity": ""
+                    }
+                }
+            }
+        },
+        "userAssignedIdentityResourceId": {
+            "value": ""
+        },
+        "useSystemAssignedIdentity": {
+            "value": true
+        },
+        "publicNetworkAccess": {
+            "value": "Enabled"
+        },
+        "storageSubscriptionID": {
+            "value": "subscription id of your storage account"
+        },
+        "storageResourceGroupName": {
+            "value": "resource group name"
+        },
+        "storageLocation": {
+            "value": "eastus"
+        },
+        "storageRoleUniqueId": {
+            "value": "storage role unique id"
+        },
+        "isNewStorageAccount": {
+            "value": true
+        },
+        "isNewFileSystemOnly": {
+            "value": false
+        },
+        "adlaResourceId": {
+            "value": ""
+        },
+        "managedResourceGroupName": {
+            "value": "name of managed synapse resource group name"
+        },
+        "storageAccessTier": {
+            "value": "Hot"
+        },
+        "storageAccountType": {
+            "value": "Standard_RAGRS"
+        },
+        "storageSupportsHttpsTrafficOnly": {
+            "value": true
+        },
+        "storageKind": {
+            "value": "StorageV2"
+        },
+        "minimumTlsVersion": {
+            "value": "TLS1_2"
+        },
+        "storageIsHnsEnabled": {
+            "value": true
+        },
+        "userObjectId": {
+            "value": "object id of user"
+        },
+        "setSbdcRbacOnStorageAccount": {
+            "value": true
+        },
+        "setWorkspaceMsiByPassOnStorageAccount": {
+            "value": false
+        },
+        "workspaceStorageAccountProperties": {
+            "value": {}
+        },
+        "managedVirtualNetworkSettings": {
+            "value": {
+                "allowedAadTenantIdsForLinking": [],
+                "preventDataExfiltration": false
+            }
+        }
+    }
+}

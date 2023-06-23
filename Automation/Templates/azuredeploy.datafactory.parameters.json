@@ -1,0 +1,51 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "subscription": {
+            "value": "02eae894-8231-4447-a12c-2bd1ed26f734"
+        },
+        "resourceGroup": {
+            "value": "rg"
+        },
+        "name": {
+            "value": "nameofdatafactory"
+        },
+        "version": {
+            "value": "V2"
+        },
+        "location": {
+            "value": "eastus"
+        },
+        "vNetEnabled": {
+            "value": true
+        },
+        "publicNetworkAccess": {
+            "value": true
+        },
+        "privateEndpoints": {
+            "value": []
+        },
+        "gitConfigureLater": {
+            "value": true
+        },
+        "tagsByResource": {
+            "value": {}
+        },
+        "userAssignedIdentitiesStr": {
+            "value": "{\"type\": \"SystemAssigned,UserAssigned\", \"userAssignedIdentities\": {\"\": {}"
+        },
+        "vaultBaseUrl": {
+            "value": ""
+        },
+        "keyName": {
+            "value": ""
+        },
+        "keyVersion": {
+            "value": ""
+        },
+        "enableCMK": {
+            "value": false
+        }
+    }
+}

@@ -1,0 +1,67 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyDefinitionID": {
+            "type": "string",
+            "metadata": {
+                "displayName": "Policy definition id",
+                "description": "id of the policy to assign."
+            },
+            "defaultValue": "policydefinitionid"
+        },
+        "policyAssignmentName": {
+            "type": "string",
+            "metadata": {
+                "displayName": "Policy assignment name",
+                "description": "Name to use for a specific policy assignment."
+            },
+            "defaultValue": "Allowed resource types"
+        },
+        "resourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "displayName": "Resource group to limit policy assignment scope",
+                "description": "Optional resource group name to limit the policy scope.",
+                "strongType": "existingResourceGroups"
+            },
+            "defaultValue": ""
+        },
+        "policyAssignmentMode": {
+            "type": "string",
+            "metadata": {
+                "displayName": "Policy assignment mode",
+                "description": "Enforced (default) or disabled."
+            },
+            "allowedValues": [
+                "Default",
+                "DoNotEnforce"
+            ],
+            "defaultValue": "Default"
+        },
+        "listOfResourceTypesAllowed": {
+            "type": "array",
+            "metadata": {
+                "displayName": "Resource Types Allowed",
+                "description": "Which resource types are allowed"
+            }
+        } 
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Authorization/policyAssignments",
+            "name": "[parameters('policyAssignmentName')]",
+            "apiVersion": "2019-09-01",
+            "properties": {
+                "scope": "[if(empty(parameters('resourceGroupName')), subscription().id, concat(subscription().id, '/resourceGroups/', parameters('resourceGroupName')))]",
+                "enforcementMode": "[parameters('policyAssignmentMode')]",
+                "policyDefinitionId": "[parameters('policyDefinitionID')]",
+                "parameters": {
+                    "listOfResourceTypesAllowed": {
+                    "value": "[parameters('listOfResourceTypesAllowed')]"
+                    }
+                }
+            }
+        }
+    ]
+}

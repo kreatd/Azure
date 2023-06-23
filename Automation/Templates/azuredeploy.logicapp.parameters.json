@@ -1,0 +1,51 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "subscriptionId": {
+            "value": "subscription id"
+        },
+        "name": {
+            "value": "logappname"
+        },
+        "location": {
+            "value": "East US"
+        },
+        "hostingPlanName": {
+            "value": "appserviceplan"
+        },
+        "serverFarmResourceGroup": {
+            "value": "rgname"
+        },
+        "alwaysOn": {
+            "value": false
+        },
+        "ftpsState": {
+            "value": "FtpsOnly"
+        },
+        "storageAccountName": {
+            "value": "storageaccountname"
+        },
+        "sku": {
+            "value": "WorkflowStandard"
+        },
+        "skuCode": {
+            "value": "WS1"
+        },
+        "workerSize": {
+            "value": "3"
+        },
+        "workerSizeId": {
+            "value": "3"
+        },
+        "numberOfWorkers": {
+            "value": "1"
+        },
+        "use32BitWorkerProcess": {
+            "value": true
+        },
+        "netFrameworkVersion": {
+            "value": "v6.0"
+        }
+    }
+}

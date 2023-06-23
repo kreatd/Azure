@@ -1,0 +1,342 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for the storage account."
+            }
+        },
+        "storageAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Storage Account"
+            }
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Premium_LRS",
+                "Premium_ZRS",
+                "Standard_GRS",
+                "Standard_GZRS",
+                "Standard_LRS",
+                "Standard_RAGRS",
+                "Standard_RAGZRS",
+                "Standard_ZRS"
+            ],
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        },
+        "storageAcctAccessTier": {
+            "type": "string",
+            "defaultValue": "Hot",
+            "allowedValues": [
+                "Hot",
+                "Cool",
+                "Archive"
+            ]
+        },
+        "storageAccKind": {
+            "type": "string",
+            "defaultValue": "StorageV2"
+
+        },
+        "isHnsEnabled": {
+            "type": "bool",
+            "defaultValue": false,
+            "allowedValues": [
+                true,
+                false
+            ],
+            "metadata": {
+                "description": "The Data Lake Storage Gen2 hierarchical namespace accelerates big data analytics workloads and enables file-level access control lists (ACLs)"
+            }
+        },
+        "isSftpEnabled": {
+            "type": "bool",
+            "defaultValue": false,
+            "allowedValues": [
+                true,
+                false
+            ],
+            "metadata": {
+                "description": "Can only be enabled if HNS is enabled.  This enables the SSH File Transfer Protocol for your storage account that allows users to access blobs via an SFTP endpoint. "
+            }
+        },
+        "isNfsV3Enabled": {
+            "type": "bool",
+            "defaultValue": false,
+            "allowedValues": [
+                true,
+                false
+            ],
+            "metadata": {
+                "description": "Can only be enabled if HNS is enabled. This enables the Network File System Protocol for your storage account that allows users to share files across a network. This option must be set during storage account creation."
+            }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Key Vault."
+            }
+        },
+        "keyVaultKeyName": {
+            "type": "string",
+            "defaultValue": "SSE-Key",
+            "metadata": {
+                "description": "Name of the key in the Key Vault"
+            }
+        },
+        "keyversion": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "If keyVersion is left blank, it will use the latest version of the key. You can also set it to a specific version if you prefer that."
+            }
+        },
+        "blobSoftDeleteRetentionDays": {
+            "type": "int",
+            "defaultValue": "7",
+            "metadata": {
+                "description": "Set the number of days that a blob marked for deletion persists until it's permanently deleted."
+            }
+        },
+        "containerSoftDeleteRetentionDays": {
+            "type": "int",
+            "defaultValue": "7",
+            "metadata": {
+                "description": "Set the number of days that a container marked for deletion persists until it's permanently deleted."
+            }
+        },
+        "shareSoftDeleteRetentionDays": {
+            "type": "int",
+            "defaultValue": "7",
+            "metadata": {
+                "description": "Set the number of days that a file share marked for deletion persists until it's permanently deleted."
+            }
+        }
+    },
+    "variables": {
+        // "keyvaulturi": "[concat('https://', tolower(parameters('keyVaultName')), '.vault.azure.net')]",
+        "storageAcctKeySource": "Microsoft.Storage",
+        "encryptionEnabled": "true",
+        "infrastructureEncryptionEnabled": "false",
+        "keyTypeForTableAndQueueEncryption": "Account",
+        "changeFeed": "false",
+        "isVersioningEnabled": "false",
+        "isContainerRestoreEnabled": "false",
+        "isBlobSoftDeleteEnabled": "true",
+        "isContainerSoftDeleteEnabled": "true",
+        "isShareSoftDeleteEnabled": "true"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-04-01",
+            "name": "[parameters('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            },
+            "kind": "[parameters('storageAccKind')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "accessTier": "[parameters('storageAcctAccessTier')]",
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "defaultToOAuthAuthentication": false,
+                "publicNetworkAccess": "Enabled",
+                "routingPreference": {
+                    "routingChoice": "MicrosoftRouting",
+                    "publishMicrosoftEndpoints": true,
+                    "publishInternetEndpoints": false
+                },
+                "azureFilesIdentityBasedAuthentication": {
+                    "directoryServiceOptions": "None"
+                },
+                "allowBlobPublicAccess": false,
+                "allowSharedKeyAccess": true,
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "ipRules": [
+                        {
+                            "value": "enter public ip range for company",
+                            "action": "Allow"
+                        }
+                    ],
+                    "defaultAction": "Deny"
+                },
+                "isHnsEnabled": "[parameters('isHnsEnabled')]",
+                "isNfsV3Enabled": "[parameters('isNfsV3Enabled')]",
+                "isSftpEnabled": "[parameters('isSftpEnabled')]",
+                "encryption": {
+                    "keySource": "[variables('storageAcctKeySource')]",
+                    "services": {
+                        "blob": {
+                            "enabled": "[variables('encryptionEnabled')]"
+                        },
+                        "file": {
+                            "enabled": "[variables('encryptionEnabled')]"
+                        },
+                        "table": {
+                            "enabled": "[variables('encryptionEnabled')]",
+                            "keyType": "[variables('keyTypeForTableAndQueueEncryption')]"
+                        },
+                        "queue": {
+                            "enabled": "[variables('encryptionEnabled')]",
+                            "keyType": "[variables('keyTypeForTableAndQueueEncryption')]"
+                        }
+                    },
+                    "requireInfrastructureEncryption": "[variables('infrastructureEncryptionEnabled')]"
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('storageAccountName'), '/default')]",
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2021-09-01",
+            "properties": {
+                "restorePolicy": {
+                    "enabled": "[variables('isContainerRestoreEnabled')]"
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": "[variables('isBlobSoftDeleteEnabled')]",
+                    "days": "[parameters('blobSoftDeleteRetentionDays')]"
+                },
+                "containerDeleteRetentionPolicy": {
+                    "enabled": "[variables('isContainerSoftDeleteEnabled')]",
+                    "days": "[parameters('containerSoftDeleteRetentionDays')]"
+                },
+                "changeFeed": {
+                    "enabled": "[variables('changeFeed')]"
+                },
+                "isVersioningEnabled": "[variables('isVersioningEnabled')]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', parameters('storageAccountName'))]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('storageAccountName'), '/default')]",
+            "type": "Microsoft.Storage/storageAccounts/fileservices",
+            "apiVersion": "2021-09-01",
+            "properties": {
+                "shareDeleteRetentionPolicy": {
+                    "enabled": "[variables('isShareSoftDeleteEnabled')]",
+                    "days": "[parameters('shareSoftDeleteRetentionDays')]"
+                }
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', parameters('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "[concat('add-',parameters('keyVaultName'), '-AccessPolicy')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "2.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+                            "name": "[concat(parameters('keyVaultName'), '/add')]",
+                            "apiVersion": "2019-09-01",
+                            "properties": {
+                                "accessPolicies": [
+                                    {
+                                        "objectId": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-09-01', 'Full').identity.principalId]",
+                                        "tenantId": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-09-01', 'Full').identity.tenantId]",
+                                        "permissions": {
+                                            "keys": [
+                                                "get",
+                                                "list",
+                                                "encrypt",
+                                                "decrypt",
+                                                "unwrapKey",
+                                                "wrapKey"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "[concat('update-', parameters('storageAccountName'), '-Encryption')]",
+            "dependsOn": [
+                "[concat('add-',parameters('keyVaultName'), '-AccessPolicy')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "3.0.0.0",
+                    "resources": [
+                        {
+                            "apiVersion": "2022-05-01",
+                            "name": "[parameters('storageAccountName')]",
+                            "location": "[parameters('location')]",
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "kind": "[parameters('storageAccKind')]",
+                            "sku": {
+                                "name": "[parameters('storageAccountType')]"
+                            },
+                            "properties": {
+                                "minimumTlsVersion": "TLS1_2",
+                                "identity": {
+                                    "type": "SystemAssigned"
+                                },
+                                "encryption": {
+                                    "keySource": "Microsoft.Keyvault",
+                                    "keyvaultproperties": {
+                                        "keyvaulturi": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')),'2016-10-01', 'full').properties.vaultUri]",
+                                        "keyname": "[parameters('keyVaultKeyName')]",
+                                        "keyversion": "[parameters('keyversion')]"
+
+                                    },
+                                    "services": {
+                                        "file": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        },
+                                        "table": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        },
+                                        "queue": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        },
+                                        "blob": {
+                                            "keyType": "Account",
+                                            "enabled": true
+                                        }
+                                    }
+
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

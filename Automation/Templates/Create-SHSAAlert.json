@@ -1,0 +1,81 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "activityLogAlerts": {
+            "defaultValue": "name of activity log alert",
+            "type": "String"
+        },
+        "ActionGroup": {
+            "defaultValue": "enter action group id",
+            "type": "String"
+        },
+        "Scope": {
+            "defaultValue": "name of subscription",
+            "type": "String"
+        },
+        "Environment": {
+            "defaultValue": "environment prefix",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "microsoft.insights/activityLogAlerts",
+            "apiVersion": "2020-10-01",
+            "name": "[parameters('activityLogAlerts')]",
+            "location": "Global",
+            "tags": {
+                "App Tag": "enter info",
+                "Consumer Cost Center": "enter info",
+                "Data Classification": "enter info",
+                "Environment": "[parameters('Environment')]",
+                "Service Owner Cost Center": "enter info",
+                "Team Name": "enter info",
+                "Technical Contact": "enter info"
+            },
+            "properties": {
+                "scopes": [
+                    "[parameters('scope')]"
+                ],
+                "condition": {
+                    "allOf": [
+                        {
+                            "field": "category",
+                            "equals": "ServiceHealth"
+                        },
+                        {
+                            "anyOf": [
+                                {
+                                    "field": "properties.incidentType",
+                                    "equals": "Security"
+                                }
+                            ]
+                        },
+                        {
+                            "field": "properties.impactedServices[*].ImpactedRegions[*].RegionName",
+                            "containsAny": [
+                                "Central US",
+                                "East US",
+                                "East US 2",
+                                "North Europe",
+                                "West Europe",
+                                "Global"
+                            ]
+                        }
+                    ]
+                },
+                "actions": {
+                    "actionGroups": [
+                        {
+                            "actionGroupId": "[parameters('actionGroup')]",
+                            "webhookProperties": {}
+                        }
+                    ]
+                },
+                "enabled": true
+            }
+        }
+    ]
+}

@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": null
+        },
+        "networkInterfaceName": {
+            "value": null
+        },
+        "networkSecurityGroupName": {
+            "value": null
+        },
+        "networkSecurityGroupRules": {
+            "value": []
+        },
+        "subnetName": {
+            "value": null
+        },
+        "virtualNetworkId": {
+            "value": null
+        },
+        "virtualMachineName": {
+            "value": null
+        },
+        "virtualMachineComputerName": {
+            "value": null
+        },
+        "virtualMachineRG": {
+            "value": null
+        },
+        "osDiskType": {
+            "value": null
+        },
+        "diskEncryptionSetId": {
+            "value": null
+        },
+        "osDiskDeleteOption": {
+            "value": "Delete"
+        },
+        "virtualMachineSize": {
+            "value": null
+        },
+        "nicDeleteOption": {
+            "value": "Delete"
+        },
+        "adminUsername": {
+            "value": null
+        },
+        "adminPassword": {
+            "value": null
+        },
+        "patchMode": {
+            "value": "AutomaticByOS"
+        },
+        "enableHotpatching": {
+            "value": false
+        }
+    }
+}
