@@ -1,0 +1,291 @@
+# this is the one that works the best
+$subscriptions = @("")
+
+$resources = New-Object System.Collections.ArrayList
+
+$subscriptions | ForEach-Object {
+
+    $null = Set-AzContext -Subscription $_
+
+    $virtualNetworkList = $null
+    $subnetList = New-Object System.Collections.ArrayList
+    $resourceList = New-Object System.Collections.ArrayList
+
+    $virtualNetworkList = Get-AzVirtualNetwork
+
+    $virtualNetworkList | ForEach-Object {
+
+        $_.Subnets | ForEach-Object {
+
+            $null = $subnetList.Add($_)
+        }
+    }
+
+    $resourceList = Get-AzResource
+
+    $resourceList | ForEach-Object {
+
+        if ($_.ResourceType -eq 'Microsoft.Network/applicationGateways') {
+
+            $resourceType, $resourceName, $applicationGateway, $applicationGatewayFrontendIPConfigs, $gatewaySubnet = $null
+
+            $resourceName = $_.Name
+            $resourceType = $_.ResourceType.Split('/')[-1]
+            
+            $applicationGateway = Get-AzApplicationGateway -Name $resourceName
+
+            $applicationGatewayFrontendIpConfigs = Get-AzApplicationGatewayFrontendIPConfig -ApplicationGateway $applicationGateway
+            $gatewaySubnet = $subnetList | Where-Object { $_.Id -ieq $applicationGateway.GatewayIPConfigurations[0].Subnet.Id }         
+
+            $publicIpAddresses = New-Object System.Collections.ArrayList
+            $privateIpAddresses = New-Object System.Collections.ArrayList
+            $vnets = New-Object System.Collections.ArrayList
+            $subnets = New-Object System.Collections.ArrayList
+            $cidrs = New-Object System.Collections.ArrayList
+            $routeTables = New-Object System.Collections.ArrayList
+
+            $applicationGatewayFrontendIpConfigs | ForEach-Object {
+
+                if ($_.PublicIpAddress) {
+
+                    $null = $publicIpAddresses.Add((Get-AzPublicIpAddress -Name $_.PublicIpAddress.Id.Split('/')[-1] -ResourceGroupName $_.PublicIpAddress.Id.Split('/')[4]).IpAddress)
+                }
+
+                if ($_.PrivateIpAddress) {
+
+                    $null = $privateIpAddresses.Add($_.PrivateIpAddress)
+                }
+            }
+
+            $null = $vnets.Add($gatewaySubnet.Id.Split('/')[-3])
+            $null = $subnets.Add($gatewaySubnet.Name)
+            $null = $cidrs.Add($gatewaySubnet.AddressPrefix.Replace("{", "").Replace("}", ""))
+
+            if ($gatewaySubnet.RouteTable.Id) { 
+                
+                $null = $routeTables.Add($gatewaySubnet.RouteTable.Id.Split('/')[-1])
+            }
+
+            $properties = [ordered]@{
+    
+                "Type"          = $resourceType
+                "Name"          = $resourceName
+                "PublicIp"      = ($publicIpAddresses -join "`n")
+                "PrivateIp"     = ($privateIpAddresses -join "`n")
+                "Vnet"          = ($vnets -join "`n")
+                "Subnet"        = ($subnets -join "`n")
+                "CIDR"          = ($cidrs -join "`n")
+                "RouteTable"    = ($routeTables -join "`n")
+            }
+            $resource = New-Object PSObject -Property $properties
+            $null = $resources.Add($resource)
+        }
+
+        if ($_.ResourceType -eq 'Microsoft.Network/loadBalancers') {        
+
+            $resourceGroupName, $resourceName, $resourceType, $loadBalancer, $loadBalancerFrontendIpConfig, $loadBalancerFrontendIpConfigs, $subnet = $null
+
+            $resourceGroupName = $_.ResourceGroupName
+            $resourceName = $_.Name
+            $resourceType = $_.ResourceType.Split('/')[-1]
+            
+            $loadBalancer = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName -Name $resourceName
+
+            $loadBalancerFrontendIpConfigs = Get-AzLoadBalancerFrontendIpConfig -LoadBalancer $loadBalancer      
+
+            $publicIpAddresses = New-Object System.Collections.ArrayList
+            $privateIpAddresses = New-Object System.Collections.ArrayList
+            $vnets = New-Object System.Collections.ArrayList
+            $subnets = New-Object System.Collections.ArrayList
+            $cidrs = New-Object System.Collections.ArrayList
+            $routeTables = New-Object System.Collections.ArrayList
+
+            $loadBalancerFrontendIpConfigs | ForEach-Object {
+
+                $loadBalancerFrontendIpConfig = $_
+
+                if ($_.PublicIpAddress) {
+
+                    $null = $publicIpAddresses.Add((Get-AzPublicIpAddress -Name $_.PublicIpAddress.Id.Split('/')[-1] -ResourceGroupName $_.PublicIpAddress.Id.Split('/')[4]).IpAddress)
+                }
+
+                if ($_.PrivateIpAddress) {
+
+                    $subnet = $subnetList | Where-Object { $_.Id -ieq $loadBalancerFrontendIpConfig.Subnet.Id }
+
+                    if ($subnet) {
+
+                        $null = $privateIpAddresses.Add($_.PrivateIpAddress)
+                        $null = $vnets.Add($subnet.Id.Split('/')[-3])
+                        $null = $subnets.Add($subnet.Id.Split('/')[-1])
+                        $null = $cidrs.Add($subnet.AddressPrefix.Replace("{", "").Replace("}", ""))
+    
+                        if ($subnet.RouteTable.Id) { 
+                    
+                            $null = $routeTables.Add($subnet.RouteTable.Id.Split('/')[-1])
+                        }
+                    }
+                }
+            }
+
+            $properties = [ordered]@{
+    
+                "Type"          = $resourceType
+                "Name"          = $resourceName
+                "PublicIp"      = ($publicIpAddresses -join "`n")
+                "PrivateIp"     = ($privateIpAddresses -join "`n")
+                "Vnet"          = ($vnets -join "`n")
+                "Subnet"        = ($subnets -join "`n")
+                "CIDR"          = ($cidrs -join "`n")
+                "RouteTable"    = ($routeTables -join "`n")
+            }
+            $resource = New-Object PSObject -Property $properties
+            $null = $resources.Add($resource)
+        }
+
+
+        if ($_.ResourceType -eq 'Microsoft.Compute/virtualMachines') {        
+
+            $resourceGroupName, $resourceName, $resourceType, $vm = $null
+
+            $resourceGroupName = $_.ResourceGroupName
+            $resourceName = $_.Name
+            $resourceType = $_.ResourceType.Split('/')[-1]
+            
+            $vm = Get-AzVm -ResourceGroupName $resourceGroupName -Name $resourceName           
+
+            $vm.NetworkProfile.NetworkInterfaces | ForEach-Object {
+
+                $networkInterface, $networkInterfaceIpConfigs, $networkInterfaceIpConfig, $subnet = $null
+
+                $networkInterface = Get-AzNetworkInterface -ResourceId $_.Id          
+                $networkInterfaceIpConfigs = Get-AzNetworkInterfaceIpConfig -NetworkInterface $networkInterface
+
+                $publicIpAddresses = New-Object System.Collections.ArrayList
+                $privateIpAddresses = New-Object System.Collections.ArrayList
+                $vnets = New-Object System.Collections.ArrayList
+                $subnets = New-Object System.Collections.ArrayList
+                $cidrs = New-Object System.Collections.ArrayList
+                $routeTables = New-Object System.Collections.ArrayList
+
+                $networkInterfaceIpConfigs | ForEach-Object {
+
+                    $networkInterfaceIpConfig = $_
+    
+                    if ($_.PublicIpAddress) {
+    
+                        $null = $publicIpAddresses.Add((Get-AzPublicIpAddress -Name $_.PublicIpAddress.Id.Split('/')[-1] -ResourceGroupName $_.PublicIpAddress.Id.Split('/')[4]).IpAddress)
+                    }
+    
+                    if ($_.PrivateIpAddress) {
+    
+                        $subnet = $subnetList | Where-Object { $_.Id -ieq $networkInterfaceIpConfig.Subnet.Id }
+    
+                        if ($subnet) {
+    
+                            $null = $privateIpAddresses.Add($_.PrivateIpAddress)
+                            $null = $vnets.Add($subnet.Id.Split('/')[-3])
+                            $null = $subnets.Add($subnet.Id.Split('/')[-1])
+                            $null = $cidrs.Add($subnet.AddressPrefix.Replace("{", "").Replace("}", ""))
+        
+                            if ($subnet.RouteTable.Id) { 
+                        
+                                $null = $routeTables.Add($subnet.RouteTable.Id.Split('/')[-1])
+                            }
+                        }
+                    }
+                }
+
+                $properties = [ordered]@{
+    
+                    "Type"          = $resourceType
+                    "Name"          = $resourceName
+                    "PublicIp"      = ($publicIpAddresses -join "`n")
+                    "PrivateIp"     = ($privateIpAddresses -join "`n")
+                    "Vnet"          = ($vnets -join "`n")
+                    "Subnet"        = ($subnets -join "`n")
+                    "CIDR"          = ($cidrs -join "`n")
+                    "RouteTable"    = ($routeTables -join "`n")
+                }
+                $resource = New-Object PSObject -Property $properties
+                $null = $resources.Add($resource)
+            }
+        }
+
+        if ($_.ResourceType -eq 'Microsoft.Compute/virtualMachineScaleSets') {        
+
+            $resourceGroupName, $resourceName, $resourceType, $vmssVms = $null
+
+            $resourceGroupName = $_.ResourceGroupName
+            $resourceName = $_.Name
+            $resourceType = $_.ResourceType.Split('/')[-1]
+            
+            $vmssVms = Get-AzVmssVM -ResourceGroupName $resourceGroupName -Name $resourceName
+
+            $vmssVms | ForEach-Object {
+
+                $vmssVm = $null
+
+                $vmssVm = Get-AzVmssVM -ResourceGroupName $resourceGroupName -VMScaleSetName $resourceName -InstanceId $_.InstanceId
+
+                $vmssVmNames = New-Object System.Collections.ArrayList
+                $publicIpAddresses = New-Object System.Collections.ArrayList
+                $privateIpAddresses = New-Object System.Collections.ArrayList
+                $vnets = New-Object System.Collections.ArrayList
+                $subnets = New-Object System.Collections.ArrayList
+                $cidrs = New-Object System.Collections.ArrayList
+                $routeTables = New-Object System.Collections.ArrayList
+
+                $null = $vmssVmNames.Add($vmssVm.Name)                
+
+                $vmssVm.NetworkProfile.NetworkInterfaces | ForEach-Object {
+
+                    $networkInterface = $null
+    
+                    $networkInterface = Get-AzResource -ResourceId $_.Id                  
+
+                    $networkInterface.Properties.ipConfigurations.properties | ForEach-Object {
+
+                        $subnet = $null
+
+                        $ipConfiguration = $_
+
+                        if ($_.privateIPAddress) {
+        
+                            $subnet = $subnetList | Where-Object { $_.Id -ieq $ipConfiguration.subnet.id }
+        
+                            if ($subnet) {
+        
+                                $null = $privateIpAddresses.Add($ipConfiguration.privateIPAddress)
+                                $null = $vnets.Add($subnet.Id.Split('/')[-3])
+                                $null = $subnets.Add($subnet.Id.Split('/')[-1])
+                                $null = $cidrs.Add($subnet.AddressPrefix.Replace("{", "").Replace("}", ""))
+            
+                                if ($subnet.RouteTable.Id) { 
+                            
+                                    $null = $routeTables.Add($subnet.RouteTable.Id.Split('/')[-1])
+                                }
+                            }
+                        }
+                    }
+                }
+
+                $properties = [ordered]@{
+        
+                    "Type"          = $resourceType
+                    "Name"          = ($vmssVmNames -join "`n")
+                    "PublicIp"      = ($publicIpAddresses -join "`n")
+                    "PrivateIp"     = ($privateIpAddresses -join "`n")
+                    "Vnet"          = ($vnets -join "`n")
+                    "Subnet"        = ($subnets -join "`n")
+                    "CIDR"          = ($cidrs -join "`n")
+                    "RouteTable"    = ($routeTables -join "`n")
+                }
+                $resource = New-Object PSObject -Property $properties
+                $null = $resources.Add($resource)
+            }
+        }        
+    }
+}
+
+# $resources | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath E:\Temp\AzureIpAddresses.csv -Force
