@@ -251,7 +251,7 @@ foreach ($vm in $vm_list) {
 
     $asr_rg_check = {}
 
-    $asr_rg_check = Get-AzResourceGroup -Name "ca11-asrtest-rg-asr" -ErrorAction SilentlyContinue
+    $asr_rg_check = Get-AzResourceGroup -Name "asrtest-rg-asr" -ErrorAction SilentlyContinue
 
     if ($null -eq $asr_rg_check) {
         Write-Output "ASR Resource Group for $($vm.Name) does NOT exist."
@@ -268,7 +268,7 @@ foreach ($vm in $vm_list) {
     ##### Get the existing Disk Encryption Set for ASR (if it exists) #####
     $asr_des_check = ""
 
-    $asr_des_check = Get-AzDiskEncryptionSet -Name "ca11-asrtest-rg-asr-des" | Select-Object -ExpandProperty Id -ErrorAction SilentlyContinue
+    $asr_des_check = Get-AzDiskEncryptionSet -Name "asrtest-rg-asr-des" | Select-Object -ExpandProperty Id -ErrorAction SilentlyContinue
    
     if ($null -eq $asr_des_check) {
         Write-Output "Could not find existing Disk Encryption Set in the ASR Resource Group: $($vm.ResourceGroupName)-asr"
@@ -290,8 +290,8 @@ foreach ($vm in $vm_detail_list) {
     $asr_des_id = ""
     $asr_rg = {}
 
-    $asr_des_id = Get-AzDiskEncryptionSet -Name "ca11-asrtest-rg-asr-des" | Select-Object -ExpandProperty Id
-    $asr_rg = Get-AzResourceGroup -Name "ca11-asrtest-rg-asr"
+    $asr_des_id = Get-AzDiskEncryptionSet -Name "asrtest-rg-asr-des" | Select-Object -ExpandProperty Id
+    $asr_rg = Get-AzResourceGroup -Name "asrtest-rg-asr"
 
     Set-Replication -VM $vm -CacheStorageAccount $PrimaryCacheStorAcct -ProtectionContainerMapping $prot_cont_mapping -RecoveryDiskEncryptionSetId $asr_des_id -ASRrg $asr_rg
 }
