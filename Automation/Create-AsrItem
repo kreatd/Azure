@@ -1,0 +1,304 @@
+###################################################################################################
+# Configure ASR for the VMs in a subscription
+# 
+# This script needs the following automation acocunt variables set up:
+#   asr_rsv_name - name of the recovery services vault used in the subscription
+#   primary_region_name - region name in all lower case with no spaces E.x. 'eastus2'
+#   primary_region_displayname - friendly region name with upper case and spaces. E.x. 'East US 2'
+#   
+###################################################################################################
+function Set-Replication {
+    param (
+        [object]
+        $VM,
+        [object]
+        $CacheStorageAccount,
+        $ProtectionContainerMapping,
+        [string]
+        $RecoveryDiskEncryptionSetId,
+        $ASRrg
+    )
+    
+    # Set up replication for VMs with Managed disks
+    # Specify replication properties for each disk of the VM that is to be replicated (create disk replication configuration)
+
+    # OS Disk
+    $OSdiskId = $VM.StorageProfile.OsDisk.ManagedDisk.Id
+    Write-Output "OS Disk to Configure: $($OSdiskId)"
+    $RecoveryOSDiskAccountType = $VM.StorageProfile.OsDisk.ManagedDisk.StorageAccountType
+    $RecoveryReplicaDiskAccountType = $VM.StorageProfile.OsDisk.ManagedDisk.StorageAccountType
+
+    $OSDiskReplicationConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk -LogStorageAccountId $CacheStorageAccount.Id `
+        -DiskId $OSdiskId -RecoveryResourceGroupId $ASRrg.ResourceId -RecoveryReplicaDiskAccountType $RecoveryReplicaDiskAccountType `
+        -RecoveryTargetDiskAccountType $RecoveryOSDiskAccountType -RecoveryDiskEncryptionSetId $RecoveryDiskEncryptionSetId
+
+    
+    # Data disk(s)
+    # Create an empty array to hold the data disk replication configuration objects
+    $DataDiskReplicationConfigs = @()
+
+    # Loop through all the data disks that may exist
+    for ($i = 0; $i -lt $VM.StorageProfile.DataDisks.Count; $i++) {
+        $datadiskId = $VM.StorageProfile.DataDisks[$i].ManagedDisk.Id
+        Write-Output "Data Disk to Configure: $($datadiskId)"
+        $RecoveryReplicaDiskAccountType = $VM.StorageProfile.DataDisks[$i].ManagedDisk.StorageAccountType
+        $RecoveryTargetDiskAccountType = $VM.StorageProfile.DataDisks[$i].ManagedDisk.StorageAccountType
+
+        $DataDiskReplicationConfigs += New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk -LogStorageAccountId $CacheStorageAccount.Id `
+            -DiskId $datadiskId -RecoveryResourceGroupId $ASRrg.ResourceId -RecoveryReplicaDiskAccountType $RecoveryReplicaDiskAccountType `
+            -RecoveryTargetDiskAccountType $RecoveryTargetDiskAccountType -RecoveryDiskEncryptionSetId $RecoveryDiskEncryptionSetId
+    }
+
+    # Create a list of disk replication configuration objects for the disks of the virtual machine that are to be replicated.
+    $diskconfigs = $DataDiskReplicationConfigs
+    $diskconfigs += $OSDiskReplicationConfig
+
+    # Start replication by creating a replication protected item. 
+    # Using a GUID for the name of the replication protected item to ensure uniqueness of name.
+    Write-Output "Attempting to start disk replication for $($VM.Name)"
+    Write-Output ""
+    $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure -AzureVmId $VM.Id -Name (New-Guid).Guid -ProtectionContainerMapping $ProtectionContainerMapping -AzureToAzureDiskReplicationConfiguration $diskconfigs -RecoveryResourceGroupId $asr_rg.ResourceId
+
+    # Track Job status to check for completion
+    while (($TempASRJob.State -eq "InProgress") -or ($TempASRJob.State -eq "NotStarted")) {
+        sleep 3;
+        $TempASRJob = Get-AzRecoveryServicesAsrJob -Job $TempASRJob
+    }
+
+    # Check if the Job completed successfully. The updated job state of a successfully completed job should be "Succeeded"
+    if ($TempASRJob.State -eq "Succeeded") {
+        Write-Output "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+        Write-Output "ASR Job State: $($TempASRJob.State)"
+        Write-Output "ASR Replication Configuration was successful!"
+        Write-Output "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+        
+    }
+    else {
+        Write-Output "!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        Write-Output "ASR Job State: $($TempASRJob.State)"
+        Write-Output "ASR Replication has FAILED!"
+        Write-Output "!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        Write-Output ""
+        Write-Output "Failure Details:"
+        Write-Output $TempASRJob
+        Write-Output "---------------------------"
+        Write-Output "Task Details:"
+        Write-Output $TempASRJob.Tasks
+        Write-Output "---------------------------"
+        Write-Output "Error Details:"
+        Write-Output $TempASRJob.Errors
+        Write-Output "-----"
+        Write-Output $TempASRJob.Errors.ProviderErrorDetails
+        Write-Output "-----"
+        Write-Output $TempASRJob.Errors.ServiceErrorDetails
+        Write-Output "---------------------------"
+    }
+}
+
+###################################################################################################
+
+Write-Output "Connecting to the current Azure Subscription"
+
+# Ensures you do not inherit an AzContext in your runbook
+Disable-AzContextAutosave -Scope Process
+
+# Connect to Azure with system-assigned managed identity
+$AzureContext = (Connect-AzAccount -Identity).context
+
+# Set and store context
+$AzureContext = Set-AzContext -SubscriptionName $AzureContext.Subscription -DefaultProfile $AzureContext
+Write-Output "Subscription:"
+Write-Output $AzureContext.Subscription.Name
+
+
+# Query all VM's in a given subscription with the ASR tag and value of Encrypted
+
+# UNCOMMENT THE LINE BELOW IF YOU ARE NOT TRYING TO TARGET A SELECT SET OF VM'S
+$vm_list = @(Get-AzResource -ResourceType "Microsoft.Compute/virtualMachines" -TagName ASR -TagValue Encrypted)
+
+##### MODIFICATION FOR THE CONFIGURE-ASR RUNBOOK FOR SELECT SET OF VM'S #####
+
+# $vm_list = @(Get-AzResource -ResourceType "Microsoft.Compute/virtualMachines" -Name "vmname")
+
+
+#############################################################################
+
+if ($vm_list.Count -eq 0) {
+    Write-Output "No VMs with the 'ASR' tag value of 'Encrypted' were found in this subscription"
+    exit
+}
+
+# Get existing RSV info
+try {
+    $asr_rsv_vault = Get-AutomationVariable -Name 'asr_rsv_name'
+    Write-Output "RSV Name: $asr_rsv_vault"
+    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Name -eq "$asr_rsv_vault" } -ErrorAction Stop
+    Write-Output "Here is the existing vault that will be used: $($vault.Name)"    
+}
+catch {
+    Write-Output "ERROR: Could not get the ASR Recovery Services Vault in the current subscription."
+    throw
+    exit
+}
+
+
+# Set Vault Context
+Write-Output "Setting the Vault Context..."
+
+try {
+    Set-AzRecoveryServicesAsrVaultContext -Vault $vault -ErrorAction Stop
+    Write-Output ""
+}
+catch {
+    Write-Output "ERROR: Could not set the Recovery Services ASR Vault Context.  See error below"
+    throw
+    exit
+}
+
+# Get the existing Fabrics
+Write-Output "Getting Recovery Service ASR Fabric..."
+try {
+    $primary_fabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FabricSpecificDetails.Location -eq (Get-AutomationVariable -Name 'primary_region_name') } -ErrorAction Stop
+}
+catch {
+    Write-Output "ERROR: Could not get the existing Recovery Services ASR Fabric"
+    throw
+    exit
+}
+
+
+# Get the existing Protection Containers
+Write-Output "Getting Recovery Service ASR Protection Container..."
+try {
+    $primary_prot_container = Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primary_fabric -ErrorAction Stop
+}
+catch {
+    Write-Output "ERROR: Could not get the existing Primary Recovery Services ASR Protection Container"
+    throw
+    exit
+}
+
+
+# Get existing Protection Container Mapping
+Write-Output "Getting Recovery Service ASR Protection Container Mapping..."
+try {
+    $prot_cont_mapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $primary_prot_container -ErrorAction Stop
+    $prot_cont_mapping = $prot_cont_mapping | Where-Object { $_.SourceFabricFriendlyName -eq (Get-AutomationVariable -Name 'primary_region_displayname') } -ErrorAction Stop
+}
+catch {
+    Write-Output "ERROR: Could not get the existing Primary Recovery Services ASR Protection Container Mapping"
+    throw
+    exit
+}
+
+
+# Get existing Primary Cache Storage Account that has 'recovery' in the name
+Write-Output "Getting Cache Storage Account that has 'recovery' in the name..."
+try {
+    $PrimaryCacheStorAcct = Get-AzStorageAccount | Where-Object { $_.StorageAccountName -like "*recovery*" } -ErrorAction Stop
+
+    # Checks if the variable is null
+    if ($null -eq $PrimaryCacheStorAcct) {
+        Write-Output "Cache Storage Account variable is empty.  A storage account with 'recovery' in the name does not exist in this subscription."
+        exit
+    }
+}
+catch {
+    Write-Output "ERROR: Could not get the existing Primary Cache Storage Account"
+    throw
+    exit
+}
+
+
+# Store all VM's already configured for ASR in a variable
+$all_asr_items = Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $primary_prot_container
+
+# Create an empty array to store the Virtual Machine objects with all their details
+$vm_detail_list = @()
+
+# Check each VM for the necessary dependencies in order to configure ASR
+foreach ($vm in $vm_list) {
+
+    ##### Check if the VM has ASR already configured. #####
+    
+    # Clear out the asr_status variable
+    $asr_status = {}
+    $asr_status = $all_asr_items | Where-Object { $_.FriendlyName -eq $vm.Name } -ErrorAction SilentlyContinue
+
+    if ($null -ne $asr_status) {
+        Write-Output "ASR is already configured for: $($vm.Name)"
+        Write-Output "Checking next VM..."
+        Write-Output ""
+        continue
+    }
+    #######################################################
+
+    ##### Check if the VM is powered on (required in order to configure ASR) #####
+    
+    $vm_status = Get-AzVM -VMName $vm.Name -Status | Select-Object -ExpandProperty PowerState
+
+    if ($vm_status -ne "VM running") {
+        Write-Output "$($vm.Name) is not currently in a running state.  Skipping for now, VM state will be checked again on the next scheduled run."
+        Write-Output ""
+        continue
+    }
+    #######################################################
+
+    ##### Check if the ASR Resource Group exists in the target/recovery region #####
+    Write-Output ""
+    Write-Output "Checking if ASR Resource Group already exists for: $($vm.Name)"
+    Write-Output ""
+
+    $asr_rg_check = {}
+
+    $asr_rg_check = Get-AzResourceGroup -Name "ca11-asrtest-rg-asr" -ErrorAction SilentlyContinue
+
+    if ($null -eq $asr_rg_check) {
+        Write-Output "ASR Resource Group for $($vm.Name) does NOT exist."
+        Write-Output "Please create an ASR Resource Group with this name: $($vm.ResourceGroupName)-asr"
+        Write-Output "Skipping configuration of ASR for $($vm.Name) until dependency has been met."
+        Write-Output ""
+        continue
+    }
+    else {
+        Write-Output "ASR Resource Group Exists"
+    }
+    #######################################################
+
+    ##### Get the existing Disk Encryption Set for ASR (if it exists) #####
+    $asr_des_check = ""
+
+    $asr_des_check = Get-AzDiskEncryptionSet -Name "ca11-asrtest-rg-asr-des" | Select-Object -ExpandProperty Id -ErrorAction SilentlyContinue
+   
+    if ($null -eq $asr_des_check) {
+        Write-Output "Could not find existing Disk Encryption Set in the ASR Resource Group: $($vm.ResourceGroupName)-asr"
+        Write-Output "Please create a Disk Encryption Set in the above Resource Group, with this name: $($vm.ResourceGroupName)-asr-des"
+        Write-Output "Skipping configuration of ASR for $($vm.Name) until dependency has been met."
+        Write-Output ""
+        continue
+    }
+    #######################################################
+
+    ##### Finally, if the VM meets all the required dependencies, then add it to the final list
+    $vm_detail_list += (Get-AzVM -ResourceGroupName $vm.ResourceGroupName -Name $vm.Name)
+}
+
+
+##### Call the 'Set-Replication' function for each VM that passed all of the pre-requisite checks above #####
+foreach ($vm in $vm_detail_list) {
+
+    $asr_des_id = ""
+    $asr_rg = {}
+
+    $asr_des_id = Get-AzDiskEncryptionSet -Name "ca11-asrtest-rg-asr-des" | Select-Object -ExpandProperty Id
+    $asr_rg = Get-AzResourceGroup -Name "ca11-asrtest-rg-asr"
+
+    Set-Replication -VM $vm -CacheStorageAccount $PrimaryCacheStorAcct -ProtectionContainerMapping $prot_cont_mapping -RecoveryDiskEncryptionSetId $asr_des_id -ASRrg $asr_rg
+}
+#######################################################
+
+Write-Output "----------------------------------------------"
+Write-Output ""
+Write-Output "Configure ASR Runbook execution has completed."
+Write-Output ""
+Write-Output "----------------------------------------------"
