@@ -7,6 +7,7 @@ def get_token(scope, authority):
     token = credential.get_token(scope)
     return token.token
 
+#splits version strings into tuples of integers
 def version_key(version):
     return tuple(map(int, version.split('.')))
 
