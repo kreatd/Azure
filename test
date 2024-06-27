@@ -1,0 +1,21 @@
+import time
+import requests
+
+# Define the endpoint where you want to send dummy errors
+dummy_error_endpoint = 'http://your-error-endpoint.com'
+
+def send_dummy_error():
+    # Simulate sending a dummy error (replace with actual implementation)
+    try:
+        response = requests.post(dummy_error_endpoint, data={'error_message': 'Dummy error occurred'})
+        if response.status_code == 200:
+            print(f"Dummy error sent successfully at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print(f"Failed to send dummy error. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to send dummy error: {e}")
+
+# Loop indefinitely, sending a dummy error every 30 seconds
+while True:
+    send_dummy_error()
+    time.sleep(30)  # Sleep for 30 seconds before sending the next dummy error
