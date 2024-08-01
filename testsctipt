@@ -1,0 +1,22 @@
+$workspaceId = "yourWorkspaceId"
+$workspaceKey = "yourWorkspaceKey"
+
+$output = "This is the output of the runbook."
+
+# Log output to Log Analytics
+$logType = "RunbookOutput"
+$timeStamp = Get-Date -Format "o"
+
+$body = @{
+    "time" = $timeStamp
+    "data" = $output
+} | ConvertTo-Json
+
+$headers = @{
+    "Log-Type" = $logType
+    "x-ms-date" = $timeStamp
+    "time-generated-field" = "time"
+    "Authorization" = ("SharedKey " + $workspaceId + ":" + (hmacsha256($workspaceKey, $body)))
+}
+
+Invoke-RestMethod -Method Post -Uri "https://$($workspaceId).ods.opinsights.azure.com/api/logs?api-version=2016-04-01" -Headers $headers -Body $body -ContentType 'application/json'
