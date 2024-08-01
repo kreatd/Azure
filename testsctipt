@@ -3,6 +3,14 @@ $workspaceKey = "yourWorkspaceKey"
 
 $output = "This is the output of the runbook."
 
+# Function to generate HMAC SHA256 hash
+function hmacsha256 {
+    param ($key, $message)
+    $hmacsha256 = New-Object System.Security.Cryptography.HMACSHA256
+    $hmacsha256.Key = [Convert]::FromBase64String($key)
+    return [Convert]::ToBase64String($hmacsha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($message)))
+}
+
 # Log output to Log Analytics
 $logType = "RunbookOutput"
 $timeStamp = Get-Date -Format "o"
@@ -12,11 +20,15 @@ $body = @{
     "data" = $output
 } | ConvertTo-Json
 
+# Create signature
+$stringToSign = "POST\n$($body.Length)\napplication/json\nx-ms-date:$timeStamp\n/api/logs"
+$signature = hmacsha256 $workspaceKey $stringToSign
+
 $headers = @{
     "Log-Type" = $logType
     "x-ms-date" = $timeStamp
     "time-generated-field" = "time"
-    "Authorization" = ("SharedKey " + $workspaceId + ":" + (hmacsha256($workspaceKey, $body)))
+    "Authorization" = "SharedKey $workspaceId:$signature"
 }
 
-Invoke-RestMethod -Method Post -Uri "https://$($workspaceId).ods.opinsights.azure.com/api/logs?api-version=2016-04-01" -Headers $headers -Body $body -ContentType 'application/json'
+Invoke-RestMethod -Method Post -Uri "https://$($workspaceId).ods.opinsights.azure.us/api/logs?api-version=2016-04-01" -Headers $headers -Body $body -ContentType 'application/json'
