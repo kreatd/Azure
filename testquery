@@ -1,0 +1,59 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Run_Log_Analytics_Query": {
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureloganalytics']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/v1/workspaces/{workspaceId}/query",
+                    "queries": {
+                        "query": "RunbookOutput_CL | where TimeGenerated >= ago(1d)"
+                    }
+                },
+                "runAfter": {},
+                "type": "ApiConnection"
+            },
+            "Send_an_email_(V2)": {
+                "inputs": {
+                    "body": "The output of the runbook is: @{body('Run_Log_Analytics_Query')['tables'][0]['rows'][0][1]}",
+                    "subject": "Runbook Output",
+                    "to": "team@example.com"
+                },
+                "runAfter": {
+                    "Run_Log_Analytics_Query": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection"
+            }
+        },
+        "triggers": {
+            "manual": {
+                "inputs": {},
+                "kind": "Http",
+                "type": "Request"
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azureloganalytics": {
+                    "connectionId": "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Web/connections/azureloganalytics",
+                    "connectionName": "azureloganalytics",
+                    "id": "/subscriptions/{subscriptionId}/providers/Microsoft.Web/locations/{location}/managedApis/azureloganalytics"
+                },
+                "office365": {
+                    "connectionId": "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Web/connections/office365",
+                    "connectionName": "office365",
+                    "id": "/subscriptions/{subscriptionId}/providers/Microsoft.Web/locations/{location}/managedApis/office365"
+                }
+            }
+        }
+    }
+}
