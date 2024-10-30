@@ -1,0 +1,23 @@
+function GetMailTenant-EIDAccessToken {
+  param (
+      [string]$scope = "https://graph.microsoft.com/" 
+  )
+
+  # Obtain Access Token for SPNAME 
+  
+  $tenantId = "TENANTID"
+  $clientID = "CLIENTID"
+  $secret = Get-AzKeyVaultSecret -VaultName VAULTNAME -Name SPNAME -AsPlainText
+  $encodedSecret = [System.Web.HttpUtility]::UrlEncode($secret) 
+
+  $RequestParams = @{
+  "URI" = "https://login.microsoftonline.com/$tenantId/oauth2/token"
+  "Body" = "grant_type=client_credentials&client_id=$clientID&client_secret=$encodedSecret&resource=$scope"  
+  "ContentType" = 'application/x-www-form-urlencoded'  
+  "Method" = "Post"
+  }
+
+  $token = Invoke-RestMethod @RequestParams
+
+  return $token
+}
