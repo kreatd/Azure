@@ -1,0 +1,100 @@
+
+connect-azaccount -identity
+
+$all_asr_items = @()
+$vaults = Get-AzRecoveryServicesVault
+
+  foreach($vault in $vaults){
+  $servicefabrics = @()
+  Set-AzRecoveryServicesAsrVaultContext -Vault $vault
+  $servicefabrics = Get-AzRecoveryServicesAsrFabric
+  foreach($fabric in $servicefabrics){
+    $protection_containers = Get-AzRecoveryServicesAsrProtectionContainer -Fabric $fabric
+    foreach($protcontainer in $protection_containers){
+      $all_asr_items += Get-AzRecoveryServicesAsrReplicationProtectedItem -ProtectionContainer $protcontainer
+      $prot_cont_mapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $protcontainer
+      $prot_cont_mapping
+    }
+  }
+}
+#$all_asr_items | select RecoveryAzureVMName, PrimaryProtectionContainerFriendlyName, RecoveryProtectionContainerFriendlyName, RecoveryFabricId              
+
+$emailOutput = New-Object System.Collections.ArrayList
+
+foreach($asr_item in $all_asr_items){
+  $resource = get-azresource -resourceId $asr_item.ID
+  $emailOutput.Add([PSCustomObject]@{
+  'VM Name' = $asr_item.RecoveryAzureVMName
+  'VM Protection State' = $resource.properties.providerSpecificDetails.vmProtectionState
+  'Disk Name' = $resource.properties.providerSpecificDetails.protectedManagedDisks.diskName -join ","
+  'Disk State' = $resource.properties.providerSpecificDetails.protectedManagedDisks.diskState -join ","
+  'Source VM ResourceGroup' = $resource.properties.providerSpecificDetails.fabricObjectId.split("/")[4]
+  'Destination VM ResourceGroup' = $resource.properties.providerSpecificDetails.recoveryAzureResourceGroupId.split("/") | Select-Object -last 1
+  'Source Location' = $resource.properties.providerSpecificDetails.primaryFabricLocation
+  'Destination Location' = $resource.properties.providerSpecificDetails.recoveryFabricLocation
+  'Source VNET' = $resource.properties.providerSpecificDetails.vmnics.vmNetworkName.split("/") | select-object -last 1
+  'Destination VNET' = $resource.properties.providerSpecificDetails.vmnics.recoveryVMNetworkID.split("/") | select-Object -last 1
+  'Source Subnet' = $resource.properties.providerSpecificDetails.vmnics.ipconfigs.subnetname -join ","
+  'Destination Subnet' = $resource.properties.providerSpecificDetails.vmnics.ipconfigs.recoverysubnetname -join ","
+})
+}
+
+
+$emailOutput = $emailOutput | convertTo-Html
+
+ $Style = @"
+    
+    <style>
+    body {
+        font-family: "Calibri";
+        font-size: 11pt;
+        color: #000000;
+        }
+    th, td { 
+        border: 1px solid #000000;
+        border-collapse: collapse;
+        padding: 5px;
+        }
+    th {
+        font-size: 1.2em;
+        text-align: left;
+        background-color: #771b61;
+        color: #ffffff;
+        }
+    td {
+        color: #000000;
+        }
+    .even { background-color: #ffffff; }
+    .odd { background-color: #bfbfbf; }
+    </style>
+
+"@
+
+    $emailBody = @"
+    $Style
+    <html>
+    <body>
+        <p>Hello,</p>
+        <p>Below is the list of all of the ASR replicated items. </p>
+        $emailOutput
+        Thanks,
+        <br>
+    </body>
+    </html>
+"@
+
+$token = GetMailTenant-EIDAccessToken
+
+$token = $token.access_token
+
+$emailParams = @{
+"token" = $token
+"emailRecipient" = ""
+"fromAddress" = ""
+"msgSubject" = ""
+"htmlbody" = $emailBody
+}
+
+
+Send-FSCEmail @emailParams
+
