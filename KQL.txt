@@ -1,0 +1,59 @@
+
+Decommission recommendation:
+InsightsMetrics
+| where Name == "UtilizationPercentage"
+| summarize PercentCPU = percentiles(Val, 95) by Computer 
+| where PercentCPU < 5 
+
+
+Resize recommendation:
+InsightsMetrics
+| where Name == "UtilizationPercentage"
+| summarize PerCentCPU = percentiles(Val, 95) by Computer 
+| where PerCentCPU < 25
+
+// Generates VM List for Decommission Evaluation 
+// Calculate CPU usage prior 30 days, filter VMs using <5%, 95% of time.  
+let StartTime = now()-31d; 
+let EndTime = now()-1d; 
+Perf 
+| where CounterName == "% Processor Time"   
+| where TimeGenerated > StartTime and TimeGenerated < EndTime 
+| summarize percCpu = percentiles(CounterValue, 95) by Computer 
+| where percCpu < 5 
+
+// Generates VM List for Resize Evaluation 
+// Calculate CPU usage prior 30 days, filter VMs using <25%, 95% of time.  
+let StartTime = now()-31d; 
+let EndTime = now()-1d; 
+Perf 
+| where CounterName == "% Processor Time"   
+| where TimeGenerated > StartTime and TimeGenerated < EndTime 
+| summarize percCpu = percentiles(CounterValue, 95) by Computer 
+| where percCpu < 25 
+
+
+
+let StartTime = now()-31d; 
+let EndTime = now()-1d; 
+
+InsightsMetrics
+| where Name == "UtilizationPercentage"
+| where TimeGenerated > StartTime and TimeGenerated < EndTime 
+| summarize PercentCPU = percentiles(Val, 95) by Computer 
+| where PercentCPU < 5
+
+
+AddonAzureBackupJobs
+| where JobOperation=="Backup"
+| summarize arg_max(TimeGenerated,*) by JobUniqueId
+| where JobStatus=="Failed"
+
+KubePodInventory
+| where TimeGenerated between (now(-24h) .. now())
+| where ClusterName == 'mycluster'
+| where Namespace == 'mynamespace'
+| where Name startswith "myjobname"
+| where PodStatus == 'Failed'
+| where ContainerStatusReason == 'Completed' //or 'Error' or doesn't matter? (there are duplicated entries, one with Completed and one with Error)
+| order by TimeGenerated desc
