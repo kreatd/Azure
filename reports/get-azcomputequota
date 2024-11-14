@@ -1,0 +1,116 @@
+
+connect-azaccount -identity -Environment AzureUSGovernment
+
+#variables
+$locations = @("usgovtexas","usgovvirginia")
+$quotaCompare = New-Object System.Collections.ArrayList
+$quotaOutput = New-Object System.Collections.ArrayList
+$emailOutput = @()
+
+#loop through each location
+foreach($location in $locations)
+{
+
+    #grab the vm usage for the location
+    $QuotaUsage = Get-AzVMUsage -Location $location
+
+    #loop through each item within quotausage for the location and add the items to quotacompare
+    foreach($quota in $QuotaUsage)
+    {
+        $quota.name.LocalizedValue
+        $quota.CurrentValue
+        $quota.limit
+
+        if($quota.limit -ne 0)
+        {
+            $quotaCompare.Add([PSCustomObject]@{
+            "Compute" = $quota.Name.LocalizedValue
+            "QuotaUsage" = $quota.currentvalue
+            "QuotaTotal" = $quota.Limit
+            "Available" = $quota.limit - $quota.currentvalue
+            })
+        }
+    }
+}
+
+#do a compare between quota total and quota available and add the values to quotaoutput if they're less than 10 percent
+foreach($quota in $quotaCompare)
+{
+    if($quota.Available -lt (.1 * $quota.quotatotal))
+    {
+        $quotaOutput.Add([PSCustomObject]@{
+        "Compute" = $quota.Compute
+        "QuotaUsage" = $quota.QuotaUsage
+        "QuotaTotal" = $quota.QuotaTotal
+        "Available" = $quota.available
+        }) 
+    } 
+}
+
+
+
+
+ $Style = @"
+    
+    <style>
+    body {
+        font-family: "Calibri";
+        font-size: 11pt;
+        color: #000000;
+        }
+    th, td { 
+        border: 1px solid #000000;
+        border-collapse: collapse;
+        padding: 5px;
+        }
+    th {
+        font-size: 1.2em;
+        text-align: left;
+        background-color: darkblue;
+        color: #ffffff;
+        }
+    td {
+        color: #000000;
+        }
+    .even { background-color: #ffffff; }
+    .odd { background-color: #bfbfbf; }
+    </style>
+
+"@
+
+
+#if there's output, add the output to the output array and send an email to the team
+if($quotaOutput)
+{
+    foreach($quota in $quotaOutput)
+    {
+        $emailOutput += "$($quota.compute) has less than 10% available compute <br>"
+        write-output "$($quota.compute) has less than 10% available compute"
+    }
+
+
+    $emailBody = @"
+    $Style
+    <html>
+    <body>
+    $emailOutput
+    </body>
+    </html>
+"@
+
+$token = GetMailTenant-EIDAccessToken
+
+$token = $token.access_token
+
+$emailParams = @{
+"token" = $token
+"emailRecipient" = ""
+#"emailRecipient" = ""
+"fromAddress" = ""
+"msgSubject" = "Azure Subscription Compute Quota Alert"
+"htmlbody" = $emailBody
+}
+
+Send-FSCEmail @emailParams
+
+}
