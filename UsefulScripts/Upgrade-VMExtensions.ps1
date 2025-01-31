@@ -1,8 +1,11 @@
+# Author Dan Kreatsoulas
+
+####################################################################################################
+## The goal here is to be able to gather VMs based off the extension and either delete or update them
+####################################################################################################
 
 
-
-
-
+#this function gathers the list of vms based off your input of the os, environment or extension name
 function get-AzVMList{
     param(
         [string]$os, #Linux or Windows
