@@ -27,7 +27,7 @@ foreach ($vm in $VMs) {
         $extension =get-azvmextension -ResourceGroupName $vm.ResourceGroupName -VMName $vm.name | select Name, ExtensionType, Publisher, TypeHandlerVersion | where {$_.name -eq "$($extensionName)"}
     }
 
-    $vmOutput.Add([PSCustomObject]@{
+    [void]$vmOutput.Add([PSCustomObject]@{
         VMName = $vm.name
         Environment = $vm.Environment
         OS = $vm.os
@@ -55,7 +55,7 @@ function remove-VMExtension{
     if ($delete) {
         # Perform the removal with -Force
         foreach($vm in $VMs){
-            Remove-AzVMExtension -ResourceGroupName $vm.resourcegroupname -Name $vm.name -VMName $vm.vmname -force
+            Remove-AzVMExtension -ResourceGroupName $vm.resourcegroupname -Name $extensionName -VMName $vm.vmname -force
         }
     } else {
         # test with -whatif
@@ -63,7 +63,7 @@ function remove-VMExtension{
             Remove-AzVMExtension -ResourceGroupName $vm.resourcegroupname -Name $extensionName -VMName $vm.vmname -whatif
         }
     }
-    return $_
+    return $extensionoutput
 }
 
 
@@ -96,7 +96,6 @@ function update-VMExtension{
             -ExtensionType $extensionType `
             -TypeHandlerVersion $typeHandlerVersion `
             -EnableAutomaticUpgrade $true `
-            -whatif
 
         }
     } else {
