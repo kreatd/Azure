@@ -1,4 +1,4 @@
-# Author Dan Kreatsoulas
+# Author Dan
 
 ####################################################################################################
 ## The goal here is to be able to gather VMs based off the extension and either delete or update them
@@ -12,8 +12,12 @@ function get-AzVMList{
         [string]$Environment, #DEVTEST, PREPROD, PROD
         [string]$extensionName #AzurePolicyforWindows, AzureNetworkWatcherExtension, AzureMonitorWindowsAgent
     )
-
-    $vms = Get-AzVM
+    $in = Get-Clipboard
+    $vms =@()
+    foreach($inn in $in){
+        $vms += get-azvm -name $inn
+    }
+    #$vms = Get-AzVM 
     $vmOutput = New-Object System.Collections.ArrayList
 
 $VMs=$vms | select name, ResourceGroupName,  @{n="os"; e={$_.StorageProfile.OsDisk.OsType}}, @{n="Environment";e={$_.tags.'Environment'}} | where {$_.Environment -eq "$($Environment)" -and $_.os -eq "$($os)"}
