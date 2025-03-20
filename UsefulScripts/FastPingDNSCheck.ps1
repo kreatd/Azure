@@ -20,29 +20,6 @@ function fastping{
   }
 }
 
-#get vm by location, unused but might be useful
-function Get-VMsByLocation{
-    param(
-        [String]$location = "east"
-        )
-$rgs = get-azresourcegroup | where {$_.resourcegroupname -like "*$location*"}
-
-# Get all VMs in the specified location
-
-foreach($rg in $rgs){
-$vms += Get-AzVM -ResourceGroupName $rg.ResourceGroupName
-}
-
-# Loop through each VM and get its name and private IP address
-foreach ($vm in $vms) {
-        $networkInterface = Get-AzNetworkInterface -ResourceGroupName $vm.ResourceGroupName -Name $vm.NetworkProfile.NetworkInterfaces[0].Id.Split('/')[-1]
-        $privateIpAddress = $networkInterface.IpConfigurations[0].PrivateIpAddress
-        [PSCustomObject]@{
-            VMName = $vm.Name
-            PrivateIpAddress = $privateIpAddress
-        }
-    }
-}
 
 #check availability of a VM
 function Check-VMAvailability {
@@ -61,11 +38,35 @@ function Check-VMAvailability {
   return $success
 }
 
-$replicatedVMs = New-Object System.Collections.ArrayList
-$pingOutput = @()
-$result_Output = New-Object System.Collections.ArrayList
 
-$asr = Get-AzRecoveryServicesvault | where {$_.name -eq "nameofRSV"}
+#get vm by location, unused but might be useful
+function Get-VMsBy{
+
+#$rgs = get-azresourcegroup 
+
+# Get all VMs in the specified location
+
+#foreach($rg in $rgs){
+#$vms += Get-AzVM -ResourceGroupName $rg.ResourceGroupName
+#}
+
+# Loop through each VM and get its name and private IP address
+foreach ($vm in $vms) {
+      $networkInterface = Get-AzNetworkInterface -ResourceGroupName $vm.ResourceGroupName -Name $vm.NetworkProfile.NetworkInterfaces[0].Id.Split('/')[-1]
+      $privateIpAddress = $networkInterface.IpConfigurations[0].PrivateIpAddress
+      [PSCustomObject]@{
+          VMName = $vm.Name
+          PrivateIpAddress = $privateIpAddress
+      }
+  }
+}
+
+$pingOutput = @()
+$result_output = New-Object System.Collections.ArrayList
+
+$replicatedVMs = New-Object System.Collections.ArrayList
+
+$asr = Get-AzRecoveryServicesvault #| where {$_.name -eq "nameofrsv"}
 Set-AzRecoveryServicesAsrVaultContext -Vault $asr
 $servicefabrics = Get-AzRecoveryServicesAsrFabric
 foreach($fabric in $servicefabrics){
@@ -78,10 +79,38 @@ foreach($fabric in $servicefabrics){
 }
 
 foreach($asr_item in $all_asr_items){
-  $replicatedVMs.Add([PSCustomObject]@{
+  [void]$replicatedVMs.Add([PSCustomObject]@{
   'VMName' = $asr_item.RecoveryAzureVMName})
 }
 
+
+############
+$vms = @()
+$VMOutput = New-Object System.Collections.ArrayList
+foreach($vm in $replicatedvms){
+$vms+=get-azvm -name $vm.vmname
+}
+
+foreach ($vm in $vms) {
+  $networkInterfaces = @()
+  $privateIpAddresses = @()
+foreach ($nic in $vm.NetworkProfile.NetworkInterfaces) {
+    $nicName = $nic.Id.Split('/')[-1]
+    $networkInterface = Get-AzNetworkInterface -ResourceGroupName $vm.ResourceGroupName -Name $nicName
+    $networkInterfaces += $networkInterface
+}
+foreach ($networkInterface in $networkInterfaces) {
+    $privateIpAddress = $networkInterface.IpConfigurations[0].PrivateIpAddress
+    $privateIpAddresses += $privateIpAddress
+}
+  $privateIpAddressesString = $privateIpAddresses -join ","
+
+  [void]$VMOutput.Add([PSCustomObject]@{
+      VMName = $vm.Name
+      PrivateIpAddress = $privateIpAddressesString
+      Location = $vm.location
+  })
+}
 #keep in mind that recovered vms will have -asr in the name
 #append -asr to every vm name
 <#
