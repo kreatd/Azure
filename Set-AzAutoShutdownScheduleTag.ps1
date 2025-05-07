@@ -10,7 +10,7 @@ try {
 # Get VM resource
 $vm = Get-AzVM -Name $vmName
     if ($vm) {
-        # Get current tags or initialize empty hashtable
+        # Get current tags
         $res = get-azResource -resourceid $vm.id
         $tags = $res.tags
         #if day of month is between 6 and 16
@@ -27,7 +27,7 @@ $vm = Get-AzVM -Name $vmName
             if ($tags.ContainsKey("AutoShutdownSchedule")) {
                 Write-output "AutoShutdownSchedule Tag already set on $vmName"
         } else {
-            Write-output "Adding AutoShutdownSchedule Tag from $vmName"
+            Write-output "Adding AutoShutdownSchedule Tag to $vmName"
             $tags.add("AutoShutdownSchedule", "11PM -> 11AM, Saturday, Sunday")
             Set-AzResource -ResourceId $vm.Id -Tag $tags -Force -whatif
             }
