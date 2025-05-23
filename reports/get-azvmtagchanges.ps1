@@ -25,14 +25,15 @@ if($null -eq $change.properties_changes."tags.AutoShutdownSchedule".newvalue -or
 
 #verify that the tag is still null or missing currently in the environment
 foreach($vm in $graphVMs){
-    $currentValue = get-azvm -name $vm.VMName | select-object name,@{n="AutoShutdownSchedule";e={$_.tags.'AutoShutdownSchedule'}}
+    $currentValue = get-azvm -name $vm.VMName | select-object name,@{n="AutoShutdownSchedule";e={$_.tags.'AutoShutdownSchedule'}}, @{n="XAutoShutdownSchedule";e={$_.tags.'XAutoShutdownSchedule'}}
     if($null -eq $currentValue.AutoShutdownSchedule -or $currentValue.AutoShutdownSchedule -eq " " -or $currentValue.AutoShutdownSchedule -eq "Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday")
     {
         [void]$changedVMs.Add([PSCustomObject]@{
             VMName = $vm.VMName
             ChangedBy = $vm.changedBy
             TimeStamp = $vm.TimeStamp
-            NewValue = $vm.NewValue
+            AutoShutdownScheduleTagValue = $vm.NewValue
+            XAutoShutdownScheduleTagValue = $currentValue.XAutoShutdownSchedule
             })
     }
 }
