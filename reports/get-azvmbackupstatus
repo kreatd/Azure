@@ -1,4 +1,3 @@
-
 #compare object function
 function Compare-Objects {
     param (
@@ -45,7 +44,7 @@ $Style = @"
 
 "@
 
-connect-azaccount -identity -Environment AzureUSGovernment
+connect-azaccount -identity -Environment "" -subscriptionid ""
 
 #Variables for output
 $backup_Output = New-Object System.Collections.ArrayList
@@ -60,18 +59,25 @@ foreach($vault in $vaults)
 {
     #refresh backup_items per vault
     $backup_Items = @()
+    #write-output "Setting RSV context to $($vault.name)"
     Set-AzRecoveryServicesVaultContext -Vault $vault
 
     $backup_Containers = Get-AzRecoveryServicesBackupContainer -ContainerType AzureVM
+   
+    #Remove VM objects that are greater than 16 characters (speeds the script up as well as it eliminates the serverless objects)
+    $backup_Containers = $backup_Containers | Where-Object { $_.friendlyname.Length -le 16 }
+
 
     foreach($backup_Container in $backup_Containers)
         {
+            #write-output "Adding $($backup_container.friendlyname) to the backup_item array."
             $backup_Items += Get-AzRecoveryServicesBackupItem -Container $backup_Container -WorkloadType AzureVM
+            #start-sleep -seconds 5
         }
 
     foreach($backup_Item in $backup_Items)
         {
-            $backup_Output.Add([PSCustomObject]@{
+            [void]$backup_Output.Add([PSCustomObject]@{
             'VM Name' = $backup_Item.Name.split(";")[-1]
             'Resource Group Name' = $backup_Item.Name.split(";")[-2]
             'Last Backup Status' = $backup_Item.LastBackupStatus
@@ -82,16 +88,22 @@ foreach($vault in $vaults)
             })
         }
 }
+#write-output "Backup Output:"
+#write-output $backup_output
 
 #List all VMs in Azure
 $VMs = get-azvm
-
+#temp filter
+#$vms = $vms | where {$_.name -ne ""}
+#$backup_output = $backup_output | where {$_."VM Name" -ne ""}
 #Compare VM list with Backup Item List
 $backup_Check = Compare-Objects -Object1 $vms.name -object2 $backup_output."VM Name"
 
 foreach($vm in $backup_Check)
 {
-    $missing_Backups.Add([PSCustomObject]@{
+    #write-output "Backup Disabled on $vm"
+
+    [void]$missing_Backups.Add([PSCustomObject]@{
     'Backups Disabled' = $vm
     })
 }
@@ -105,9 +117,11 @@ foreach($vault in $vaults)
 
 foreach($vm_BackupJob in $vm_BackupJobs)
 {
-    if($vm_BackupJob.status -eq "Failed")
+    if($vm_BackupJob.status -eq "Failed" -and $vm_BackupJob.Operation -eq "Backup")
     {
-    $vm_BackupJobOutput.Add([PSCustomObject]@{
+    #write-output "Failed Backup: $vm_BackupJob"
+
+    [void]$vm_BackupJobOutput.Add([PSCustomObject]@{
     'Backups Failed' = $vm_BackupJob.workloadname
     'VM Job Status' = $vm_BackupJob.Status
     'VM Job StartTime' = $vm_BackupJob.StartTime
@@ -116,24 +130,30 @@ foreach($vm_BackupJob in $vm_BackupJobs)
     'VM Job Error Details' = $vm_BackupJob.ErrorDetails.ErrorMessage
     })
     }else{
-    $vm_BackupJob
+    #$vm_BackupJob
     }
 }
 
 #$missing_Backups = $missing_Backups | convertTo-Html
+#temp filter
+#$vm_BackupJobOutput = $vm_BackupJobOutput | where {$_."Backups Failed" -ne "nameofvm"}
 
 if($missing_Backups.count -ne 0)
 {
     $missing_Backups = $missing_Backups | convertTo-Html
+    #write-output "Missing Backups:"
+    #write-output $missing_Backups
 }else{
-        write-output "There are no missing backups."
+    write-output "There are no missing backups."
 }
 
 if($vm_BackupJobOutput.count -ne 0)
 {
     $vm_BackupJobOutput = $vm_BackupJobOutput | convertTo-Html
+    #write-output "Failed Backups:"
+    #write-outpu $vm_BackupJobOutput
 }else{
-        write-output "There are no failed backups."
+    write-output "There are no failed backups."
 }
 
 $emailBody = @"
@@ -147,6 +167,7 @@ $Style
 </body>
 </html>
 "@
+
 
 if($backup_Check.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
     {
