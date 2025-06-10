@@ -14,7 +14,7 @@ try {
 $vm = Get-AzVM -Name $vmName
     if ($vm) {
         # Get current tags
-        $res = get-azResource -resourceid $vm.id  -type "Microsoft.Compute/virtualMachines"
+        $res = get-azResource -resourceid $vm.id
         $tags = $res.tags
         #if day of month is between 6 and 16
         if ($dayOfMonth -ge 6 -and $dayOfMonth -le 16)
