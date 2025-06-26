@@ -35,7 +35,7 @@ foreach ($vm in $vms) {
             "Nickname" = $vm.tags.Role
             "IP Address" = $nic.Properties.ipConfigurations.properties.privateIPAddress
             "OS/ios/FW Version" = ($($vm.osname).Substring(0,1).ToUpper() + $($vm.osname).Substring(1))+",$($vm.osversion)"
-            "Memory Size / Type" = "$($compute.memoryinmb/1024)GB,$($vm.hardwareprofile.vmsize),$($diskoutput)"
+            "Memory Size / Type" = "RAM: $($compute.memoryinmb/1024)GB,CPU: $($compute.numberofcores)vcpus,$($vm.hardwareprofile.vmsize),$($diskoutput)"
             "AppCode" = $vm.Tags.AppCode
         })
     }
@@ -46,7 +46,7 @@ foreach ($vm in $vms) {
             "Nickname" = $vm.tags.Role
             "IP Address" = $nic.Properties.ipConfigurations.properties.privateIPAddress
             "OS/ios/FW Version" = $vm.osname
-            "Memory Size / Type" = "$($compute.memoryinmb/1024)GB,$($vm.hardwareprofile.vmsize),$($diskoutput)"
+            "Memory Size / Type" = "RAM: $($compute.memoryinmb/1024)GB,CPU: $($compute.numberofcores)vcpus,$($vm.hardwareprofile.vmsize),$($diskoutput)"
             "AppCode" = $vm.Tags.AppCode
         })
     } else {
