@@ -1,3 +1,4 @@
+
 #compare object function
 function Compare-Objects {
     param (
@@ -13,6 +14,81 @@ function Compare-Objects {
     $uniqueItems = $result | Where-Object { $filteredObject2 -notcontains $_ }
 
     return $uniqueitems
+}
+
+function Enable-AzVMBackup {
+    param (
+    [Parameter(Mandatory=$true)]
+    [string]$VMName,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$CustomBackupPolicyName
+    )
+    
+    try {
+        # Get the VMs
+        $vm = Get-AzVM -Name $VMName -ErrorAction Stop
+
+        # Get the Recovery Services Vault in the same location
+        switch ($vm) {
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+            { $vm.tags.'Environment' -eq "" -and $vm.location -eq "" } {
+                $vault = Get-AzRecoveryServicesVault -Name ""
+                $policyName = ""
+                break
+            }
+        }
+    
+        # Set the vault context
+        Set-AzRecoveryServicesVaultContext -Vault $vault
+    
+        # Determine if custom backup policy
+        if ($CustomBackupPolicyName) {
+        $policyName = $CustomBackupPolicyName
+        }
+        
+        # Get the backup policy
+        $backupPolicy = Get-AzRecoveryServicesBackupProtectionPolicy -Name $policyName -VaultId $vault.ID -ErrorAction Stop
+    
+        # Enable backup for the VM
+        #foreach ($vm in $vms) {
+        Enable-AzRecoveryServicesBackupProtection `
+            -ResourceGroupName $vm.resourceGroupName `
+            -Name $vm.name `
+            -Policy $backupPolicy `
+            -VaultId $vault.ID `
+            -ErrorAction Stop
+        
+        Write-Output "Backup enabled successfully for VM: $($vm.Name) with policy: $policyName"
+        #}
+    }
+    catch {
+        Write-Error "Error enabling VM backup: $($_.Exception.Message)"
+    }
 }
 
 
@@ -44,12 +120,13 @@ $Style = @"
 
 "@
 
-connect-azaccount -identity -Environment "" -subscriptionid ""
+connect-azaccount -identity -Environment AzureUSGovernment -subscriptionid ""
 
 #Variables for output
 $backup_Output = New-Object System.Collections.ArrayList
 $vm_BackupJobOutput = New-Object System.Collections.ArrayList
 $missing_Backups = New-Object System.Collections.ArrayList
+$enabled_Backups = New-Object System.Collections.ArrayList
 
 #List Vaults
 $vaults = Get-AzRecoveryServicesVault
@@ -140,11 +217,31 @@ foreach($vm_BackupJob in $vm_BackupJobs)
 
 if($missing_Backups.count -ne 0)
 {
-    $missing_Backups = $missing_Backups | convertTo-Html
-    #write-output "Missing Backups:"
-    #write-output $missing_Backups
+    foreach($vm in $missing_backups){
+        $vm = get-azvm -name $vm."Backups Disabled"
+        if($vm.tags.ContainsKey("BackupsDisabled") -or $vm.tags.ContainsKey("Backupsdisabled") -or $vm.tags.ContainsKey("backupsdisabled")){
+            write-output "$($vm.name) backups are disabled.... skipping this VM."
+        }elseif($backup_Output|where {$_."VM Name" -notlike $vm.name}){
+            #this double checks that there aren't backups enabled by verifying it within the container (will prevent backups from being enabled when they're already enabled
+            #current fix for the subscription throttling issue.)  There's no issue if this runs without this "double check", I just thought this was annoying!
+            write-output "enabling backups on $($vm.name)"
+            Enable-AzVMBackup -VMName $vm.name
+            [void]$enabled_Backups.Add([PSCustomObject]@{
+            'Enabled Backups On' = $vm.name
+            })
+        }else{
+            write-output "The script timed out on the storage container and believes $($vm.name) is not being backed up... just ignore this message, probably due to subscription throttling from something in the environment"
+        }
+    }
 }else{
     write-output "There are no missing backups."
+}
+if($enabled_Backups.count -ne 0)
+{
+    $enabled_Backups = $enabled_Backups | convertTo-Html
+
+}else{
+    write-output "There are VMs to enable backups on."
 }
 
 if($vm_BackupJobOutput.count -ne 0)
@@ -160,7 +257,7 @@ $emailBody = @"
 $Style
 <html>
 <body>
-    $missing_Backups
+    $enabled_Backups
     <br>
     $vm_BackupJobOutput
 
@@ -168,8 +265,7 @@ $Style
 </html>
 "@
 
-
-if($backup_Check.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
+if($enabled_Backups.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
     {
     $token = GetMailTenant-EIDAccessToken
 
@@ -177,8 +273,8 @@ if($backup_Check.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
 
     $emailParams = @{
     "token" = $token
-    "emailRecipient" = ""
     #"emailRecipient" = ""
+    "emailRecipient" = ""
     "fromAddress" = ""
     "msgSubject" = "Azure VM Backup Status Report"
     "htmlbody" = $emailBody
@@ -188,3 +284,4 @@ if($backup_Check.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
     }else{
         write-output "There are currently no issues with Azure VM Backups in our environment."
 }
+
