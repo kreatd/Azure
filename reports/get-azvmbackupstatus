@@ -241,7 +241,7 @@ if($enabled_Backups.count -ne 0)
     $enabled_Backups = $enabled_Backups | convertTo-Html
 
 }else{
-    write-output "There are VMs to enable backups on."
+    write-output "There are no VMs to enable backups on."
 }
 
 if($vm_BackupJobOutput.count -ne 0)
