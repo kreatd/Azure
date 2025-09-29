@@ -87,7 +87,8 @@ function Enable-AzVMBackup {
         #}
     }
     catch {
-        Write-Error "Error enabling VM backup: $($_.Exception.Message)"
+          Write-Error "Error enabling VM backup: $($_.Exception.Message)"
+        $error_messages += "Error enabling VM backup: $($_.Exception.Message)"
     }
 }
 
@@ -265,7 +266,7 @@ $Style
 </html>
 "@
 
-if($enabled_Backups.count -ne 0 -or $vm_BackupJobOutput.count -ne 0)
+if($enabled_Backups.count -ne 0 -or $vm_BackupJobOutput.count -ne 0 -or $error_messages.count -eq 0)
     {
     $token = GetMailTenant-EIDAccessToken
 
