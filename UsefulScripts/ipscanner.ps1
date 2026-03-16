@@ -1,6 +1,5 @@
 # Daniel Kreatsoulas
 # gather port information
-
 $netstatOutput = netstat -ano # | Select-String "TCP"
 $netstatOutput | ForEach-Object {
     $fields = $_ -split "\s+"
@@ -30,3 +29,4 @@ $netstatOutput | ForEach-Object {
 
     }
 }
+
