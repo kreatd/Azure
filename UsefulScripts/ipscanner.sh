@@ -1,6 +1,7 @@
 #!/bin/bash
 #Daniel Kreatsoulas
-# port information
+# port information#!/bin/bash
+
 netstatOutput=$(netstat -anop)
 
 while IFS= read -r line; do
